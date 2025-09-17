@@ -1,22 +1,34 @@
-FROM node:20-alpine
+# 개발용: 코드 변경 시 핫리로드
+FROM node:20-bullseye-slim
 
+# 컨테이너 안에서 일반 사용자 사용 (호스트 파일 권한 꼬임 방지)
+USER root
 WORKDIR /app
 
-# 1) 빌드 도구 (node-gyp 등) - 필요한 경우
-RUN apk add --no-cache python3 make g++ libc6-compat
+# 의존성 캐시 최적화
+COPY --chown=node:node package*.json ./
+RUN npm ci || npm install
 
-# 2) (프라이빗 레지스트리 사용 시) .npmrc 먼저 복사
-# COPY .npmrc ./
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends \
+     iproute2 \
+     iputils-ping \
+     curl \
+     ca-certificates \
+     netcat-openbsd \
+     dnsutils \
+     traceroute \
+  && rm -rf /var/lib/apt/lists/*
 
-# 3) 패키지 먼저 복사 → 레이어 캐시 극대화
-COPY package.json package-lock.json* ./
+# Vite 기본 포트
+EXPOSE 8081
 
-# 4) lockfile이 있으면 npm ci, 없으면 npm install
-RUN if [ -f package-lock.json ]; then npm ci; else npm install; fi
-
-# 5) 소스 복사
-COPY . .
-
+# 파일 변경 감지(도커 볼륨 환경) 안정화
+ENV CHOKIDAR_USEPOLLING=true
+ENV WATCHPACK_POLLING=true
 ENV HOST=0.0.0.0
-EXPOSE 5173
-CMD ["npm","run","dev","--","--host","0.0.0.0"]
+
+USER node
+
+# 기본 명령 (compose에서 --host 제어)
+CMD ["npm", "run", "dev"]
