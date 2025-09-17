@@ -90,41 +90,16 @@ export default function WirelessDevices() {
     }
   };
 
-    // 버튼 누를 때: MQTT 토픽 구독 + 앱 프로토콜 구독 요청(publish)
-  const handleStart = () => {
-    if (!connected) { alert("MQTT가 연결되지 않았습니다."); return; }
-
-    // 1) MQTT 레벨 구독(브로커에 등록)
-    subscribeTopics(TOPICS, { qos: 0 });
-
-    // 2) 앱 프로토콜 구독 요청(서버에 “데이터 보내세요” 명령)
-    publish(REQ_TOPIC, {
-      action: "subscribe",
-      options: { requestId: "abc12345", filter: { l2id: "0", packetType: "ALL" } },
-    }, { qos: 0 });
-  };
-
-  // 버튼에서 중단 누를 때: 필요 시 MQTT 구독 해제 + 앱 프로토콜 unsubscribe
-  const handleStop = () => {
-    // 1) 앱 프로토콜 구독 해제(서버에 “이제 그만 보내세요”)
-    publish(REQ_TOPIC, { action: "unsubscribe", options: { requestId: "abc12345" } }, { qos: 0 });
-
-    // 2) MQTT 레벨 구독 해제(이 컴포넌트 책임 범위)
-    unsubscribeTopics(TOPICS);
-  };
-
   // ✅ MQTT 연결 및 polling 자동 시작
   useEffect(() => {
     const topics = [
       "fac/V2X_MAINTENANCE_HUB_PA/V2X_MAINTENANCE_HUB_CLIENT_PA/cv2xPktMsg/resp",
       "fac/V2X_MAINTENANCE_HUB_PA/V2X_MAINTENANCE_HUB_CLIENT_PA/cv2xPktMsg/jsonMsg",
       "fac/GNSS_PA/ALL/gpsData/jsonMsg",
-      "fac/V2X_MAINTENANCE_HUB_PA/V2X_MAINTENANCE_HUB_CLIENT_PA/startSystemCheck/resp",
     ];
     subscribeTopics(topics, { qos: 0 });
 
     const off = addMessageHandler(async (topic, message /* , packet */) => {
-      console.log("got Message: ", topic);
       // 1) cv2x jsonMsg
       if (topic.endsWith("/cv2xPktMsg/jsonMsg")) {
         try {
