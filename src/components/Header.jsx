@@ -33,7 +33,8 @@ export default function Header({ activePage, isDarkMode, setIsDarkMode }) {
 
   useEffect(() => {
     const off = addMessageHandler((topic, message) => {
-      if (!topic.endsWith("startSystemCheck/resp") || !topic.endsWith("stopSystemCheck/resp")) return;
+      // console.log("button response: ", topic);
+      if (!topic.endsWith("startSystemCheck/resp") && !topic.endsWith("stopSystemCheck/resp")) return;
 
       // 안전 파싱
       let obj;

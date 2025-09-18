@@ -134,7 +134,6 @@ export default function WirelessDevices() {
       if (topic === "fac/GNSS_PA/ALL/gpsData/jsonMsg") {
         try {
           const payload = JSON.parse(message.toString());
-          console.log("payload: ", payload);
           if (payload?.data) {
             await saveGnssData(payload.data);
             const { latitude, longitude } = payload.data;
