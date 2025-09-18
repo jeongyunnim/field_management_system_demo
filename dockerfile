@@ -18,10 +18,12 @@ RUN apt-get update \
      netcat-openbsd \
      dnsutils \
      traceroute \
-  && rm -rf /var/lib/apt/lists/*
+     gcc
+
+RUN npm install -g pmtiles@latest
 
 # Vite 기본 포트
-EXPOSE 8081
+EXPOSE 8080 8081 8082
 
 # 파일 변경 감지(도커 볼륨 환경) 안정화
 ENV CHOKIDAR_USEPOLLING=true
