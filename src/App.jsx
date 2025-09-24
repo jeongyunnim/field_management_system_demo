@@ -5,7 +5,7 @@ import { useMqttStore } from "./stores/MqttStore";
 import Sidebar from "./components/Sidebar";
 import Header from "./components/Header";
 
-import Dashboard from "./pages/Dashboard";
+import Main from "./pages/Main";
 import Notification from "./pages/Notification";
 import DeviceList from "./pages/DeviceList.jsx";
 import RegisterDevice from "./pages/RegisterDevice.jsx";
@@ -19,7 +19,7 @@ import ExtensionStore from "./pages/ExtensionStore.jsx";
 
 export default function App() {
   const [isDarkMode, setIsDarkMode] = useState(false);
-  const [activePage, setActivePage] = useState("Dashboard");
+  const [activePage, setActivePage] = useState("Main");
   const [isCollapsed, setIsCollapsed] = useState(false);
 
   /**
@@ -35,8 +35,8 @@ export default function App() {
 
   const renderPage = () => {
     switch (activePage) {
-      case "Dashboard":
-        return <Dashboard />;
+      case "Main":
+        return <Main />;
       case "Notification":
         return <Notification />;
       case "DeviceList":

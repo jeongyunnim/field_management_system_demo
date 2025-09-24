@@ -1,11 +1,13 @@
 // src/components/Header.jsx
-import { useEffect } from "react";
-import InspectionButton from "./InspectionButton";
+import { useEffect, useState } from "react";
+import StartInspectionButton from "./StartInspectionButton";
+import StopInspectionButton from "./StopInspectionButton";
 import { useMqttStore } from "../stores/MqttStore";
 
 export default function Header({ activePage, isDarkMode, setIsDarkMode }) {
+  const [isInspecting, setIsInspecting] = useState(false);
   const pageMap = {
-    Dashboard: ["Dashboard"],
+    Main: ["Main"],
     Notification: ["Events", "Notification"],
     DeviceList: ["Monitoring", "Device List"],
     WirelessDevices: ["Monitoring", "WirelessDevices"],
@@ -34,6 +36,7 @@ export default function Header({ activePage, isDarkMode, setIsDarkMode }) {
   useEffect(() => {
     const off = addMessageHandler((topic, message) => {
       // console.log("button response: ", topic);
+      
       if (!topic.endsWith("startSystemCheck/resp") && !topic.endsWith("stopSystemCheck/resp")) return;
 
       // 안전 파싱
@@ -78,7 +81,8 @@ export default function Header({ activePage, isDarkMode, setIsDarkMode }) {
       VER: "1.0", TRANSACTION_ID: 123456790, TS: "2025-09-16T11:40:00+09:00"
     }, { qos: 0});
   };
-
+  const onBegan = () => setIsInspecting(true);
+  const onEnded = () => setIsInspecting(false);
   return (
     <header className="flex items-center justify-between px-6 py-3 border-b bg-white dark:bg-gray-800 shadow-sm">
       {/* Breadcrumbs */}
@@ -94,28 +98,29 @@ export default function Header({ activePage, isDarkMode, setIsDarkMode }) {
         ))}
       </div>
 
-      {/* Action buttons */}
+            {/* Action buttons */}
       <div className="flex items-center space-x-4 text-sm text-gray-600 dark:text-gray-300">
-        <button className="hover:text-black dark:hover:text-white">📊 Add ▼</button>
-        <button className="hover:text-black dark:hover:text-white">⚙️</button>
-        <button className="hover:text-black dark:hover:text-white">🕒 Last 5 seconds ▼</button>
-        <button className="hover:text-black dark:hover:text-white">🔍</button>
-        <button className="hover:text-black dark:hover:text-white">🔄</button>
-
-        {/* 전역 점검 버튼 */}
-        <InspectionButton
+        <StartInspectionButton
           onStart={handleStart}
-          onStop={handleStop}
-          widthClass="w-40"
+          widthClass="w-32"
           heightClass="h-10"
           className="shadow-sm"
+          disabled={isInspecting}  // 점검 중이면 시작 버튼 비활성
+          onBegan={onBegan}
         />
 
-        <button
-          onClick={() => setIsDarkMode(!isDarkMode)}
-          className="hover:text-black dark:hover:text-white"
-        >
-          {isDarkMode ? "🌙 Dark" : "☀️ Light"}
+        <StopInspectionButton
+          onStop={handleStop}
+          widthClass="w-32"
+          heightClass="h-10"
+          className="shadow-sm"
+          disabled={!isInspecting} // 점검 중일 때만 활성
+          onEnded={onEnded}
+        />
+
+        <div>TEST_USER1</div>
+        <button className="btn bg-rose-500 text-white transition duration-200 hover:bg-rose-600 hover:shadow-lg hover:scale-105 active:scale-95 dark:hover:bg-rose-400">
+          LOGOUT
         </button>
       </div>
     </header>

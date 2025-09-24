@@ -65,9 +65,9 @@ export default function Sidebar({
       )}
 
       <nav className="space-y-6">
-        {/* Dashboard */}
+        {/* Main */}
         <a
-          onClick={() => handleClick("Dashboard")}
+          onClick={() => handleClick("Main")}
           className="flex items-center space-x-2 hover:text-green-300 cursor-pointer"
         >
           <LayoutDashboard size={18} />
@@ -76,7 +76,7 @@ export default function Sidebar({
               isCollapsed ? "hidden" : "inline"
             } text-base md:text-lg`}
           >
-            Dashboard
+            Main
           </span>
         </a>
         {/* Events */}
@@ -226,20 +226,6 @@ export default function Sidebar({
             } text-base md:text-lg`}
           >
             Settings
-          </span>
-        </a>
-        {/* Extension Store */}
-        <a
-          onClick={() => handleClick("ExtensionStore")}
-          className="flex items-center space-x-2 hover:text-green-300 cursor-pointer"
-        >
-          <Plug size={18} />
-          <span
-            className={`${
-              isCollapsed ? "hidden" : "inline"
-            } text-base md:text-lg`}
-          >
-            Extension Store
           </span>
         </a>
       </nav>
