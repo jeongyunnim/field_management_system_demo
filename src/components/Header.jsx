@@ -50,9 +50,9 @@ export default function Header({ activePage, isDarkMode, setIsDarkMode }) {
       const msg  = obj?.data?.MSG  ?? obj?.MSG  ?? "응답 수신";
 
       if (Number(code) === 200) {
-        console.log("✅ 점검 시작 성공:", msg);
+        console.log("✅ 확인 성공:", msg);
       } else {
-        console.warn(`점검 시작 실패${code ? ` (CODE ${code})` : ""}: ${msg}`);
+        console.warn(`확인 실패${code ? ` (CODE ${code})` : ""}: ${msg}`);
       }
     });
 
@@ -74,7 +74,7 @@ export default function Header({ activePage, isDarkMode, setIsDarkMode }) {
 
   // 버튼 중단: 서버에 unsubscribe + MQTT 구독 해제
   const handleStop = () => {
-    publish("fac/V2X_MAINTENANCE_HUB_PA/V2X_MAINTENANCE_HUB_CLIENT_PA/stopSystemCheck/req", { 
+    publish("fac/V2X_MAINTENANCE_HUB_CLIENT_PA/V2X_MAINTENANCE_HUB_PA/stopSystemCheck/req", { 
       VER: "1.0", TRANSACTION_ID: 123456790, TS: "2025-09-16T11:40:00+09:00"
     }, { qos: 0});
   };
