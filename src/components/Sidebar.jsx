@@ -79,47 +79,6 @@ export default function Sidebar({
             Main
           </span>
         </a>
-        {/* Events */}
-        <button
-          onClick={() => toggle("events")}
-          className="flex items-center justify-between w-full hover:text-green-300"
-        >
-          <div className="flex items-center space-x-2">
-            <Bell size={18} />
-            <span
-              className={`${
-                isCollapsed ? "hidden" : "inline"
-              } text-base md:text-lg`}
-            >
-              Events
-            </span>
-          </div>
-          {open.events ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
-        </button>
-        {/* Events.Notification */}
-        <AnimatePresence>
-          {open.events && (
-            <motion.div
-              initial={{ opacity: 0, y: -10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -10 }}
-              transition={{ duration: 0.2 }}
-              className={`${
-                isCollapsed ? "" : "ml-6"
-              } mt-2 space-y-2 text-base md:text-lg`}
-            >
-              <a
-                onClick={() => handleClick("Notification")}
-                className="flex items-center space-x-2 hover:text-green-300 cursor-pointer"
-              >
-                <AlertCircle size={16} />
-                <span className={`${isCollapsed ? "hidden" : "inline"}`}>
-                  Notification
-                </span>
-              </a>
-            </motion.div>
-          )}
-        </AnimatePresence>
         {/* Monitoring */}
         <button
           onClick={() => toggle("monitoring")}
@@ -173,47 +132,9 @@ export default function Sidebar({
                   Wireless Devices
                 </span>
               </a>
-              {/* Monitoring.Map */}
-              <a
-                onClick={() => handleClick("MapView")}
-                className="flex items-center space-x-2 hover:text-green-300 cursor-pointer"
-              >
-                <MapPinned size={16} />
-                <span className={`${isCollapsed ? "hidden" : "inline"}`}>
-                  Map view
-                </span>
-              </a>
             </motion.div>
           )}
         </AnimatePresence>
-        {/* Messages */}
-        <a
-          onClick={() => handleClick("Messages")}
-          className="flex items-center space-x-2 hover:text-green-300 cursor-pointer"
-        >
-          <MessageCircle size={18} />
-          <span
-            className={`${
-              isCollapsed ? "hidden" : "inline"
-            } text-base md:text-lg`}
-          >
-            Messages
-          </span>
-        </a>
-        {/* V2X Test */}
-        <a
-          onClick={() => handleClick("V2XTest")}
-          className="flex items-center space-x-2 hover:text-green-300 cursor-pointer"
-        >
-          <Activity size={18} />
-          <span
-            className={`${
-              isCollapsed ? "hidden" : "inline"
-            } text-base md:text-lg`}
-          >
-            V2X Test
-          </span>
-        </a>
         {/* Settings */}
         <a
           onClick={() => handleClick("Settings")}

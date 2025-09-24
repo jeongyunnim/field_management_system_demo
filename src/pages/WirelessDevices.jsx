@@ -91,123 +91,123 @@ export default function WirelessDevices() {
   };
 
   // ✅ MQTT 연결 및 polling 자동 시작
-  useEffect(() => {
-    const topics = [
-      "fac/V2X_MAINTENANCE_HUB_PA/V2X_MAINTENANCE_HUB_CLIENT_PA/cv2xPktMsg/resp",
-      "fac/V2X_MAINTENANCE_HUB_PA/V2X_MAINTENANCE_HUB_CLIENT_PA/cv2xPktMsg/jsonMsg",
-      "fac/GNSS_PA/ALL/gpsData/jsonMsg",
-    ];
-    subscribeTopics(topics, { qos: 0 });
+  // useEffect(() => {
+  //   const topics = [
+  //     "fac/V2X_MAINTENANCE_HUB_PA/V2X_MAINTENANCE_HUB_CLIENT_PA/cv2xPktMsg/resp",
+  //     "fac/V2X_MAINTENANCE_HUB_PA/V2X_MAINTENANCE_HUB_CLIENT_PA/cv2xPktMsg/jsonMsg",
+  //     "fac/GNSS_PA/ALL/gpsData/jsonMsg",
+  //   ];
+  //   subscribeTopics(topics, { qos: 0 });
 
-    const off = addMessageHandler(async (topic, message /* , packet */) => {
-      // 1) cv2x jsonMsg
-      if (topic.endsWith("/cv2xPktMsg/jsonMsg")) {
-        try {
-          const payload = JSON.parse(message.toString());
-          console.log("payload: ", payload);
+  //   const off = addMessageHandler(async (topic, message /* , packet */) => {
+  //     // 1) cv2x jsonMsg
+  //     if (topic.endsWith("/cv2xPktMsg/jsonMsg")) {
+  //       try {
+  //         const payload = JSON.parse(message.toString());
+  //         console.log("payload: ", payload);
           
-          let psid = null;
-          try {
-            psid = payload?.hdr16093?.transport?.bcMode?.destAddress?.extension?.content ?? null;
-          } catch {}
-          const l2idSrc = payload?.rxParams?.l2idSrc ?? null;
+  //         let psid = null;
+  //         try {
+  //           psid = payload?.hdr16093?.transport?.bcMode?.destAddress?.extension?.content ?? null;
+  //         } catch {}
+  //         const l2idSrc = payload?.rxParams?.l2idSrc ?? null;
 
-          let rssi = null;
-          try {
-            const arr = payload?.rxParams?.rssiDbm8;
-            if (Array.isArray(arr) && arr.length > 0) {
-              const maxRaw = Math.max(...arr);
-              rssi = Math.round((maxRaw / 8) * 10) / 10;
-            }
-          } catch {}
+  //         let rssi = null;
+  //         try {
+  //           const arr = payload?.rxParams?.rssiDbm8;
+  //           if (Array.isArray(arr) && arr.length > 0) {
+  //             const maxRaw = Math.max(...arr);
+  //             rssi = Math.round((maxRaw / 8) * 10) / 10;
+  //           }
+  //         } catch {}
 
-          if (psid != null && l2idSrc != null) {
-            await updateMessageCount({ psid: String(psid), l2idSrc: String(l2idSrc), rssi });
-          }
-        } catch (e) {
-          console.warn("cv2x JSON parse error:", e);
-        }
-        return;
-      }
+  //         if (psid != null && l2idSrc != null) {
+  //           await updateMessageCount({ psid: String(psid), l2idSrc: String(l2idSrc), rssi });
+  //         }
+  //       } catch (e) {
+  //         console.warn("cv2x JSON parse error:", e);
+  //       }
+  //       return;
+  //     }
 
-      // 2) GNSS
-      if (topic === "fac/GNSS_PA/ALL/gpsData/jsonMsg") {
-        try {
-          const payload = JSON.parse(message.toString());
-          if (payload?.data) {
-            await saveGnssData(payload.data);
-            const { latitude, longitude } = payload.data;
-            if (latitude && longitude) {
-              const headingDeg = (payload.data.heading ?? 0) / 100;
-              setVehiclePosition({ latitude, longitude, heading: headingDeg });
-            }
-          }
-        } catch (e) {
-          console.warn("GNSS JSON parse failed:", e);
-        }
-        return;
-      }
+  //     // 2) GNSS
+  //     if (topic === "fac/GNSS_PA/ALL/gpsData/jsonMsg") {
+  //       try {
+  //         const payload = JSON.parse(message.toString());
+  //         if (payload?.data) {
+  //           await saveGnssData(payload.data);
+  //           const { latitude, longitude } = payload.data;
+  //           if (latitude && longitude) {
+  //             const headingDeg = (payload.data.heading ?? 0) / 100;
+  //             setVehiclePosition({ latitude, longitude, heading: headingDeg });
+  //           }
+  //         }
+  //       } catch (e) {
+  //         console.warn("GNSS JSON parse failed:", e);
+  //       }
+  //       return;
+  //     }
 
-      // 3) startSystemCheck 응답
-      if (topic === "fac/V2X_MAINTENANCE_HUB_PA/V2X_MAINTENANCE_HUB_CLIENT_PA/startSystemCheck/req") {
-        console.log("subscribe systemcheck request");
-        try {
-          const payload = JSON.parse(message.toString());
-          console.log("system check resp:", payload?.data?.MSG);
-        } catch (e) {
-          console.warn("System Check JSON parse failed:", e);
-        }
-        return;
-      }
+  //     // 3) startSystemCheck 응답
+  //     if (topic === "fac/V2X_MAINTENANCE_HUB_PA/V2X_MAINTENANCE_HUB_CLIENT_PA/startSystemCheck/req") {
+  //       console.log("subscribe systemcheck request");
+  //       try {
+  //         const payload = JSON.parse(message.toString());
+  //         console.log("system check resp:", payload?.data?.MSG);
+  //       } catch (e) {
+  //         console.warn("System Check JSON parse failed:", e);
+  //       }
+  //       return;
+  //     }
 
-      // 4) cv2xPktMsg resp (마지막)
-      if (topic.endsWith(RESP_SUFFIX)) {
-        try {
-          const payload = JSON.parse(message.toString());
-          setResponses((prev) => [...prev.slice(-49), payload]);
+  //     // 4) cv2xPktMsg resp (마지막)
+  //     if (topic.endsWith(RESP_SUFFIX)) {
+  //       try {
+  //         const payload = JSON.parse(message.toString());
+  //         setResponses((prev) => [...prev.slice(-49), payload]);
 
-          // ✅ ACK 수신: 동일 requestId면 핸드셰이크 종료 신호
-          if (payload.status === "ok" && (!payload.requestId || payload.requestId === REQUEST_ID)) {
-            hsRef.current.ack = true;
-          }
+  //         // ✅ ACK 수신: 동일 requestId면 핸드셰이크 종료 신호
+  //         if (payload.status === "ok" && (!payload.requestId || payload.requestId === REQUEST_ID)) {
+  //           hsRef.current.ack = true;
+  //         }
 
-          if (payload.status === "ok" && payload.meta) {
-            setAckMessage({
-              action: payload.action || "-",
-              requestId: payload.requestId || "-",
-              l2id: payload.meta.l2id || "-",
-              packetType: payload.meta.packetType || "-",
-              timestamp: payload.timestamp || 0,
-              message: payload.message || "-",
-            });
-          }
-        } catch (e) {
-          console.warn("cv2x resp JSON parse error:", e);
-        }
-        return;
-      }
-    });
+  //         if (payload.status === "ok" && payload.meta) {
+  //           setAckMessage({
+  //             action: payload.action || "-",
+  //             requestId: payload.requestId || "-",
+  //             l2id: payload.meta.l2id || "-",
+  //             packetType: payload.meta.packetType || "-",
+  //             timestamp: payload.timestamp || 0,
+  //             message: payload.message || "-",
+  //           });
+  //         }
+  //       } catch (e) {
+  //         console.warn("cv2x resp JSON parse error:", e);
+  //       }
+  //       return;
+  //     }
+  //   });
 
-    if (connected) startSubscribeHandshake(1, 3000);
+  //   if (connected) startSubscribeHandshake(1, 3000);
 
-    return () => {
-      off();
-      unsubscribeTopics(topics);
-      cancelSubscribeHandshake(); 
-    };
-  }, [addMessageHandler, subscribeTopics, unsubscribeTopics, publish, connected]);
+  //   return () => {
+  //     off();
+  //     unsubscribeTopics(topics);
+  //     cancelSubscribeHandshake(); 
+  //   };
+  // }, [addMessageHandler, subscribeTopics, unsubscribeTopics, publish, connected]);
 
-  // ✅ 내부 polling 로직 분리
-  const sendSubscribeOnce = () => {
-    return publish(
-      REQ_TOPIC,
-      {
-        action: "subscribe",
-        options: { requestId: REQUEST_ID, filter: { l2id: "0", packetType: "ALL" } },
-      },
-      { qos: 0 }
-    );
-  };
+  // // ✅ 내부 polling 로직 분리
+  // const sendSubscribeOnce = () => {
+  //   return publish(
+  //     REQ_TOPIC,
+  //     {
+  //       action: "subscribe",
+  //       options: { requestId: REQUEST_ID, filter: { l2id: "0", packetType: "ALL" } },
+  //     },
+  //     { qos: 0 }
+  //   );
+  // };
 
   // const startPolling = () => {
   //   if (!connected) return;

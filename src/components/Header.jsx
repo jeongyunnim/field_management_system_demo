@@ -23,56 +23,8 @@ export default function Header({ activePage, isDarkMode, setIsDarkMode }) {
   const subscribeTopics   = useMqttStore((s) => s.subscribeTopics);
   const unsubscribeTopics = useMqttStore((s) => s.unsubscribeTopics);
   const publish           = useMqttStore((s) => s.publish);
-  const connected         = useMqttStore((s) => s.connected);
-  const addMessageHandler = useMqttStore((s) => s.addMessageHandler);
 
-  // 요청/응답/데이터 토픽
-  const REQ_TOPIC = "fac/V2X_MAINTENANCE_HUB_CLIENT_PA/V2X_MAINTENANCE_HUB_PA/startSystemCheck/req";
-  const TOPICS = [
-    "fac/V2X_MAINTENANCE_HUB_PA/V2X_MAINTENANCE_HUB_CLIENT_PA/startSystemCheck/resp",
-    "fac/V2X_MAINTENANCE_HUB_PA/V2X_MAINTENANCE_HUB_CLIENT_PA/stopSystemCheck/resp"
-  ];
-
-  useEffect(() => {
-    const off = addMessageHandler((topic, message) => {
-      // console.log("button response: ", topic);
-      
-      if (!topic.endsWith("startSystemCheck/resp") && !topic.endsWith("stopSystemCheck/resp")) return;
-
-      // 안전 파싱
-      let obj;
-      try { obj = JSON.parse(message.toString()); }
-      catch (e) {
-        console.warn("startSystemCheck resp JSON parse failed:", e);
-        alert("점검 응답 파싱에 실패했습니다.");
-        return;
-      }
-
-      // 프로토콜 예: payload.data.CODE / payload.data.MSG 형태였음
-      const code = obj?.data?.CODE ?? obj?.CODE;
-      const msg  = obj?.data?.MSG  ?? obj?.MSG  ?? "응답 수신";
-
-      if (Number(code) === 200) {
-        console.log("✅ 확인 성공:", msg);
-      } else {
-        console.warn(`확인 실패${code ? ` (CODE ${code})` : ""}: ${msg}`);
-      }
-    });
-
-    subscribeTopics(TOPICS, { qos: 0 }); // MQTT 레벨 구독
-
-    return () => {
-      off();
-      unsubscribeTopics(TOPICS);
-    };
-  }, [addMessageHandler, subscribeTopics, unsubscribeTopics]);
-
-  // 버튼 시작: 브로커 구독 + 서버에 구독 요청 1회
   const handleStart = () => {
-    if (!connected) { alert("MQTT가 연결되지 않았습니다."); return; }
-    publish(REQ_TOPIC, {                  // 앱 프로토콜 구독 요청
-       VER: "1.0", TRANSACTION_ID: 123456789, TS: "2025-09-16T11:40:00+09:00"
-    }, { qos: 0 });
   };
 
   // 버튼 중단: 서버에 unsubscribe + MQTT 구독 해제
