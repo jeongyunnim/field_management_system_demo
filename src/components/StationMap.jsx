@@ -123,7 +123,7 @@ function MapControl({ autoFollow, setAutoFollow }) {
       btn.setAttribute("tabindex", "0");
       btn.innerText = initial ? "추적: 켜짐" : "추적: 꺼짐";
       btn.className = "px-4 py-2 rounded-md text-sm font-medium shadow-sm transition-colors";
-      btn.className += initial ? " bg-indigo-600 hover:bg-indigo-700 text-white" : " bg-gray-600 hover:bg-gray-700 text-white";
+      btn.className += initial ? " bg-indigo-600 text-white" : " bg-gray-600 text-white";
       btn.style.minWidth = "96px";
       btn.style.height = "40px";
       btn.style.display = "inline-flex";

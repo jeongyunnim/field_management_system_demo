@@ -4,18 +4,13 @@ import StartInspectionButton from "./StartInspectionButton";
 import StopInspectionButton from "./StopInspectionButton";
 import { useMqttStore } from "../stores/MqttStore";
 
-export default function Header({ activePage, isDarkMode, setIsDarkMode }) {
+export default function Header({ activePage}) {
   const [isInspecting, setIsInspecting] = useState(false);
   const pageMap = {
     Main: ["Main"],
-    Notification: ["Events", "Notification"],
     DeviceList: ["Monitoring", "Device List"],
     WirelessDevices: ["Monitoring", "WirelessDevices"],
-    MapView: ["Monitoring", "Map View"],
-    Messages: ["Messages"],
-    V2XTest: ["V2X Test"],
     Settings: ["Settings"],
-    ExtensionStore: ["Extension Store"],
   };
   const path = pageMap[activePage] || [activePage];
 
@@ -36,26 +31,24 @@ export default function Header({ activePage, isDarkMode, setIsDarkMode }) {
   const onBegan = () => setIsInspecting(true);
   const onEnded = () => setIsInspecting(false);
   return (
-    <header className="flex items-center justify-between px-6 py-3 border-b bg-white dark:bg-gray-800 shadow-sm">
+    <header className="flex items-center h-64 justify-between px-20 py-3 bg-[#121d2d] backdrop-blur shadow-sm">
       {/* Breadcrumbs */}
-      <div className="flex items-center space-x-2 text-gray-600 dark:text-gray-300 text-sm">
+      <div className="flex items-center space-x-2 text-slate-400 text-4xl">
         <span>Home</span>
         {path.map((item, index) => (
           <span key={index} className="flex items-center space-x-2">
             <span>&gt;</span>
-            <span className={`${index === path.length - 1 ? "font-medium text-gray-800 dark:text-white" : ""}`}>
+            <span className={`${index === path.length - 1 ? "font-medium text-gray-100 " : ""}`}>
               {item}
             </span>
           </span>
         ))}
       </div>
-
-            {/* Action buttons */}
-      <div className="flex items-center space-x-4 text-sm text-gray-600 dark:text-gray-300">
+          
+      {/* Action buttons */}
+      <div className="flex items-center space-x-10 text-4xl text-slate-100">
         <StartInspectionButton
           onStart={handleStart}
-          widthClass="w-32"
-          heightClass="h-10"
           className="shadow-sm"
           disabled={isInspecting}  // 점검 중이면 시작 버튼 비활성
           onBegan={onBegan}
@@ -63,16 +56,16 @@ export default function Header({ activePage, isDarkMode, setIsDarkMode }) {
 
         <StopInspectionButton
           onStop={handleStop}
-          widthClass="w-32"
-          heightClass="h-10"
           className="shadow-sm"
           disabled={!isInspecting} // 점검 중일 때만 활성
           onEnded={onEnded}
         />
-
-        <div>TEST_USER1</div>
-        <button className="btn bg-rose-500 text-white transition duration-200 hover:bg-rose-600 hover:shadow-lg hover:scale-105 active:scale-95 dark:hover:bg-rose-400">
-          LOGOUT
+        <div>
+          {/* 사용자 이미지 넣기? */}
+          TEST_USER1
+        </div>
+        <button className="btn btn-text">
+          Logout
         </button>
       </div>
     </header>

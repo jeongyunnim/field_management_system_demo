@@ -51,8 +51,8 @@ export default function App() {
   };
 
   return (
-    <div className={isDarkMode ? "dark" : ""}>
-      <div className="flex h-screen bg-white dark:bg-gray-900 text-black dark:text-white">
+    <div>
+      <div className="flex min-h-[100dvh] text-black">
         {/* Sidebar */}
         <Sidebar
           activePage={activePage}
@@ -63,15 +63,12 @@ export default function App() {
 
         {/* Main content area */}
         <div className="flex-1 flex flex-col">
-          {/* ✅ Header 고정 */}
           <Header
-            isDarkMode={isDarkMode}
-            setIsDarkMode={setIsDarkMode}
             activePage={activePage}
           />
 
           {/* ✅ Page content */}
-          <main className="flex-1 bg-gray-100 dark:bg-gray-800 p-6 overflow-auto">
+          <main className="flex-1 bg-[#0f172a] p-6 overflow-auto">
             {renderPage()}
           </main>
         </div>

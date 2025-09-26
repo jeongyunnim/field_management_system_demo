@@ -9,6 +9,18 @@ html {
 }
 
 .btn {
-  @apply px-6 py-2 rounded-full font-medium shadow-md 
-         transition duration-200;
+  @apply relative inline-flex items-center justify-center
+    px-12 py-5 rounded-2xl font-semibold
+    shadow-md
+    active:scale-95
+    transition duration-200;
+
+  @apply border border-white/20 dark:border-white/10
+    ring-1 ring-slate-900/10
+    backdrop-blur-sm;
+}
+
+
+.btn-text {
+  @apply text-5xl font-medium
 }
