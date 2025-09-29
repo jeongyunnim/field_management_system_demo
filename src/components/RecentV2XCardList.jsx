@@ -64,9 +64,6 @@ export default function RecentV2XCardList({ onStatusUpdate }) {
 
   return (
     <div className="mt-6">
-      <h3 className="text-xl font-bold text-gray-800 mb-4">
-        📡 Recent Station Activity
-      </h3>
       {Object.keys(groupedData).length === 0 ? (
         <div className="flex justify-center items-center h-32 text-gray-500">
           <svg

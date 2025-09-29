@@ -4,6 +4,7 @@ import { useMqttStore } from "../stores/MqttStore";
 import { saveV2XMessage, msgDb } from "../dbms/v2x_msg_db";
 import { updateMessageCount, countDb } from "../dbms/v2x_count_db";
 import { saveGnssData, gnssDb } from "../dbms/gnss_db";
+import { Card } from "../components/Card";
 import RecentV2XCardList from "../components/RecentV2XCardList";
 import StationMap from "../components/StationMap";
 import { calculateDistanceKm } from "../utils/distance";
@@ -233,26 +234,27 @@ export default function WirelessDevices() {
   // };
 
   return (
-    <div className="flex h-[calc(100vh-4rem)] relative">
+    <div className="grid grid-cols-[2fr_1fr] w-full h-full gap-3">
       {/* 좌측: 카드 + 버튼 */}
-      <div className="w-2/3 p-4 overflow-y-auto">
-        {/* 초기화 버튼 */}
-        <div className="mb-4 flex justify-end">
-          <button
+      <Card className="p-4 overflow-y-auto">
+        <h2 className="text-3xl font-semibold">
+            Recent Station Activity
+        </h2>
+        <div className="flex justify-end gap-3">
+          <button className="btn-sm btn-text-sm"
             onClick={handleClearDb}
-            className="px-4 py-2 bg-red-600 text-white rounded disabled:opacity-50"
-            disabled={loading}
+            disabled={loading}          
           >
-            🧹 데이터 초기화
+          초기화
           </button>
         </div>
 
         {/* 카드 목록 */}
         <RecentV2XCardList onStatusUpdate={handleStatusUpdate} />
-      </div>
+      </Card>
 
       {/* 우측: 지도 */}
-      <div className="w-1/3 border-l border-gray-300 h-full">
+      <Card className="border-l border-gray-300 h-full">
         {
           <StationMap
             latitude={vehiclePosition?.latitude}
@@ -284,7 +286,7 @@ export default function WirelessDevices() {
               })}
           />
         }
-      </div>
+      </Card>
 
       {/* 로딩 오버레이 */}
       {loading && (

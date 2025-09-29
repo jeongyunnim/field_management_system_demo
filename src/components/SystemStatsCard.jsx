@@ -1,6 +1,6 @@
 // SystemStatsCard.jsx
 import React from "react";
-import { Card } from "../pages/Main";
+import { Card } from "./Card";
 
 export default function SystemStatsCard() {
   // 임의 값(%) — 필요시 API 데이터로 교체
@@ -16,30 +16,30 @@ export default function SystemStatsCard() {
   const display = order.map(k => byKey[k]).filter(Boolean);
 
   return (
-    <Card className="w-full">
-    <div className="flex flex-row justify-between">
-      <h2 className="text-4xl font-semibold">
-          시스템 통계
-      </h2>
-      <div className="flex flex-row mr-20 text-2xl">
-        <Legend dot="bg-emerald-500" label="정상" />
-        <Legend dot="bg-rose-500"    label="장애" />
-        <Legend dot="bg-amber-500"   label="기타" />
-        <Legend dot="bg-slate-300"   label="미확인" />
+    <Card>
+      <div className="flex flex-row justify-between">
+        <h2 className="text-3xl font-semibold">
+            시스템 통계
+        </h2>
+        <div className="flex flex-row text-md">
+          <Legend dot="bg-emerald-500" label="정상" />
+          <Legend dot="bg-rose-500"    label="장애" />
+          <Legend dot="bg-amber-500"   label="기타" />
+          <Legend dot="bg-slate-300"   label="미확인" />
+        </div>
       </div>
-    </div>
 
 
-    <div className="flex w-full h-[calc(100%-3.5rem)] content-center justify-evenly flex-wrap gap-y-8">
-      {display.map(d => (
-        <Donut key={d.key} value={d.value} color={d.color} label={d.label} />
-      ))}
-    </div>
+      <div className="grid grid-cols-2 grid-rows-2 w-full h-full mt-6 place-items-center gap-8">
+        {display.map(d => (
+          <Donut key={d.key} value={d.value} color={d.color} label={d.label} />
+        ))}
+      </div>
     </Card>
   );
 }
 
-function Donut({ value = 0, color = "#22c55e", size = 300, stroke = 35, label = "" }) {
+function Donut({ value = 0, color = "#22c55e", size = 200, stroke = 32}) {
   // SVG 원주 계산
   const r = (size - stroke) / 2;
   const c = 2 * Math.PI * r;
@@ -47,7 +47,7 @@ function Donut({ value = 0, color = "#22c55e", size = 300, stroke = 35, label = 
   const dash = (pct / 100) * c;
 
   return (
-    <div className="relative place-items-center">
+    <div className="relative place-items-center ">
       <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} className="drop-shadow-sm">
         {/* 배경 트랙 */}
         <circle
@@ -73,9 +73,7 @@ function Donut({ value = 0, color = "#22c55e", size = 300, stroke = 35, label = 
 
       {/* 중앙 수치 */}
       <div className="absolute inset-0 grid place-items-center">
-        <div className="flex flex-col items-center">
-          <span className="text-5xl font-bold" style={{ color }}>{pct}%</span>
-        </div>
+        <span className="text-5xl font-bold" style={{ color }}>{pct}%</span>
       </div>
     </div>
   );
@@ -83,8 +81,8 @@ function Donut({ value = 0, color = "#22c55e", size = 300, stroke = 35, label = 
 
 function Legend({ dot, label }) {
   return (
-    <div className="flex items-center gap-3 ml-7">
-      <span className={`h-3.5 w-3.5 rounded-full ring-1 ring-black/10 ${dot}`} />
+    <div className="flex items-center ml-7">
+      <span className={`h-1.5 w-1.5 rounded-full ring-1 ring-black/10 ${dot} mr-2`} />
       <span>{label}</span>
     </div>
   );

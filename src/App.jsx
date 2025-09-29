@@ -1,5 +1,5 @@
 // src/App.jsx
-import { useState, useEffect } from "react";
+import { useState, useMemo, useLayoutEffect } from "react";
 import mqtt from "mqtt";
 import { useMqttStore } from "./stores/MqttStore";
 import Sidebar from "./components/Sidebar";
@@ -13,11 +13,26 @@ import WirelessDevices from "./pages/WirelessDevices";
 import V2XTest from "./pages/V2XTest.jsx";
 import Settings from "./pages/Settings.jsx";
 
+const DESIGN_W = 2560;
+const DESIGN_H = 1400;
+
+
+function useViewportScale() {
+  const [size, setSize] = useState({ w: window.innerWidth, h: window.innerHeight });
+  useLayoutEffect(() => {
+    const onResize = () => setSize({ w: window.innerWidth, h: window.innerHeight });
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
+  const scale = useMemo(() => Math.min(size.w / DESIGN_W, size.h / DESIGN_H), [size.w, size.h]);
+  return scale;
+}
+
 export default function App() {
-  const [isDarkMode, setIsDarkMode] = useState(false);
   const [activePage, setActivePage] = useState("Main");
   const [isCollapsed, setIsCollapsed] = useState(false);
-
+  const scale = useViewportScale();
+  
   /**
    *  MQTT 초기화
    */
@@ -51,8 +66,8 @@ export default function App() {
   };
 
   return (
-    <div>
-      <div className="flex min-h-[100dvh] text-black">
+    <div className="h-dvh w-dvw bg-[#0f172a] flex items-center justify-center">
+      <div className="w-1/5 flex flex-1 h-full min-h-0">
         {/* Sidebar */}
         <Sidebar
           activePage={activePage}
@@ -61,14 +76,14 @@ export default function App() {
           setIsCollapsed={setIsCollapsed}
         />
 
-        {/* Main content area */}
-        <div className="flex-1 flex flex-col">
+      {/* Main content area */}
+        <div className="w-4/5 flex flex-1 min-h-0 flex-col">
           <Header
             activePage={activePage}
           />
 
           {/* ✅ Page content */}
-          <main className="flex-1 bg-[#0f172a] p-6 overflow-auto">
+          <main className="w-full flex-1 min-h-0 p-7">
             {renderPage()}
           </main>
         </div>

@@ -38,7 +38,7 @@ export default function StopInspectionButton({
             "absolute left-5 top-1/2 -translate-y-1/2 rounded-full w-3.5 h-3.5 bg-white/90",
             disabled ? "" : "animate-pulse",
           ].join(" ")}/>
-          <span className="pointer-events-none mx-auto whitespace-nowrap tracking-tight">
+          <span className="ml-2 pointer-events-none mx-auto whitespace-nowrap tracking-tight">
             점검 중단
           </span>
         </button>

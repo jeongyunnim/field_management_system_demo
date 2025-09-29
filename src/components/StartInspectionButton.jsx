@@ -25,7 +25,7 @@ export default function StartInspectionButton({
             "btn-text",
             disabled
               ? "bg-slate-600 text-white/90 cursor-not-allowed opacity-70"
-              : "bg-emerald-600 text-white",
+              : "bg-[#28B555] text-white",
             "shadow-sm ring-1 ring-emerald-700/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70",
             className,
           ].join(" ")}
@@ -35,7 +35,7 @@ export default function StartInspectionButton({
             "absolute left-5 top-1/2 -translate-y-1/2 rounded-full w-3.5 h-3.5",
             disabled ? "bg-white/50" : "bg-white/90",
           ].join(" ")} />
-          <span className="pointer-events-none mx-auto whitespace-nowrap tracking-tight">
+          <span className="ml-2 pointer-events-none mx-auto whitespace-nowrap tracking-tight">
             점검 시작
           </span>
         </button>

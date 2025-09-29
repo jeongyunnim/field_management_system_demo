@@ -121,8 +121,8 @@ function MapControl({ autoFollow, setAutoFollow }) {
       btn.title = "지도를 드래그/확대하면 자동으로 꺼집니다";
       btn.setAttribute("aria-pressed", String(!!initial));
       btn.setAttribute("tabindex", "0");
-      btn.innerText = initial ? "추적: 켜짐" : "추적: 꺼짐";
-      btn.className = "px-4 py-2 rounded-md text-sm font-medium shadow-sm transition-colors";
+      btn.innerText = initial ? "추적: ON" : "추적: OFF";
+      btn.className = "rounded-md text-sm font-medium shadow-sm transition-colors";
       btn.className += initial ? " bg-indigo-600 text-white" : " bg-gray-600 text-white";
       btn.style.minWidth = "96px";
       btn.style.height = "40px";
@@ -214,7 +214,7 @@ export default function StationMap({
       center={[center.lat, center.lon]}
       zoom={15}
       scrollWheelZoom={true}
-      style={{ width: "100%", height: "100%" }}
+      style={{ width: "100%", height: "100%", borderRadius: "0.5rem"}}
     >
       <PMTilesVectorLayer pmtilesPath="/maps/seoulToGunsan.pmtiles" />
 

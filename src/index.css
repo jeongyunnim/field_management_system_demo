@@ -10,17 +10,40 @@ html {
 
 .btn {
   @apply relative inline-flex items-center justify-center
-    px-12 py-5 rounded-2xl font-semibold
+    px-8 py-2 rounded-2xl font-semibold
     shadow-md
     active:scale-95
     transition duration-200;
 
-  @apply border border-white/20 dark:border-white/10
+  @apply border border-white/20
     ring-1 ring-slate-900/10
     backdrop-blur-sm;
 }
 
+.side-status-title {
+  @apply text-xs
+}
 
 .btn-text {
-  @apply text-5xl font-medium
+  @apply text-2xl font-medium
+}
+
+.btn-sm {
+  @apply relative inline-flex items-center justify-center
+    px-2 py-1 rounded-lg font-semibold
+    shadow-md
+    active:scale-95
+    transition duration-200;
+
+  @apply border border-white/20
+    ring-1 ring-slate-900/10
+    backdrop-blur-sm;
+}
+
+.btn-text-sm {
+  @apply text-lg font-medium
+}
+
+.fms-bt {
+  @apply border-b-2 border-b-slate-600 mb-2
 }

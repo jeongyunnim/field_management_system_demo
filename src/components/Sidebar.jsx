@@ -15,121 +15,97 @@ export default function Sidebar({ activePage, setActivePage, isCollapsed, setIsC
   return (
     <aside
       className={`${
-        isCollapsed ? "w-44" : "w-1/5"
-      } bg-slate-700 text-slate-100 transition-all duration-300`}
+        isCollapsed ? "w-1/7" : "w-1/5"
+      } h-full bg-slate-700 text-slate-100 transition-all duration-300 flex flex-col`}
     >
-      <div className="grid h-screen grid-rows-[auto,1fr,auto] text-3xl">
-        {/* 헤더 */}
-        <div className={`flex items-center justify-between h-64 px-3`}>
-          {!isCollapsed && (
-            <img src="/logo_white.png" alt="DYNAVISTA" className="mx-auto block h-auto object-contain" />
+      <div className="relative border-b border-slate-600/40">
+        <button
+          type="button"
+          onClick={() => setIsCollapsed(!isCollapsed)}
+          className="absolute inset-y-0 right-0 inline-flex items-center justify-center"
+          aria-label={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+        >
+          <div className="p-2">{isCollapsed ? <ChevronRight size={36} /> : <ChevronLeft size={36} />}</div>
+        </button>
+
+        <div className="h-24 flex items-center justify-center px-4">
+          <img
+            src="/logo_white.png"
+            alt="DYNAVISTA"
+            className={"object-contain w-32"}
+          />
+        </div>
+      </div>
+      {/* NAV */}
+      <nav className="flex-1 px-2 space-y-1.5 text-lg">
+
+        {/* Main */}
+        <SidebarItem
+          icon={LayoutDashboard}
+          label="Main"
+          active={activePage === "Main"}
+          collapsed={isCollapsed}
+          onClick={() => go("Main")}
+        />
+
+        {/* Monitoring (토글) */}
+        <SidebarItem
+          icon={Monitor}
+          label="Monitoring"
+          active={isMonitoringActive}
+          collapsed={isCollapsed}
+          onClick={() => toggle("monitoring")}
+        />
+
+        {/* 하위 메뉴 (접힘/펼침 공통) */}
+        <AnimatePresence>
+          {open.monitoring && (
+            <motion.div
+              initial={{ opacity: 0, y: -6 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -6 }}
+              transition={{ duration: 0.18 }}
+              className={isCollapsed ? "mt-1 space-y-1" : "mt-1 pl-3 space-y-1"}
+            >
+              <SidebarItem
+                icon={Server}
+                label="Device List"
+                active={activePage === "DeviceList"}
+                collapsed={isCollapsed}
+                onClick={() => go("DeviceList")}
+              />
+              <SidebarItem
+                icon={Wifi}
+                label="Wireless Devices"
+                active={activePage === "WirelessDevices"}
+                collapsed={isCollapsed}
+                onClick={() => go("WirelessDevices")}
+              />
+            </motion.div>
           )}
-          <button onClick={() => setIsCollapsed(!isCollapsed)} className="p-1 -mr-1">
-            {isCollapsed ? <ChevronRight size={36} /> : <ChevronLeft size={36} />}
-          </button>
-        </div>
+        </AnimatePresence>
 
-        {/* NAV */}
-        <nav className="overflow-y-auto px-2 py-3 space-y-1.5">
+        {/* Settings */}
+        <SidebarItem
+          icon={Settings}
+          label="Settings"
+          active={activePage === "Settings"}
+          collapsed={isCollapsed}
+          onClick={() => go("Settings")}
+        />
+      </nav>
 
-          {/* Main */}
-          <SidebarItem
-            icon={LayoutDashboard}
-            label="Main"
-            active={activePage === "Main"}
-            collapsed={isCollapsed}
-            onClick={() => go("Main")}
-            iconSizeCollapsed={56}
-            iconSizeExpanded={50}
-            iconColWidth={56}
-            labelClassName="text-4xl"
-            expandedPadding="px-4 py-3.5"
-            collapsedPadding="px-3.5 py-3"
-          />
-
-          {/* Monitoring (토글) */}
-          <SidebarItem
-            icon={Monitor}
-            label="Monitoring"
-            active={isMonitoringActive}
-            collapsed={isCollapsed}
-            onClick={() => toggle("monitoring")}
-            iconSizeCollapsed={56}
-            iconSizeExpanded={50}
-            iconColWidth={56}
-            labelClassName="text-4xl"
-            expandedPadding="px-4 py-3.5"
-            collapsedPadding="px-3.5 py-3"
-          />
-
-          {/* 하위 메뉴 (접힘/펼침 공통) */}
-          <AnimatePresence>
-            {open.monitoring && (
-              <motion.div
-                initial={{ opacity: 0, y: -6 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -6 }}
-                transition={{ duration: 0.18 }}
-                className={isCollapsed ? "mt-1 space-y-1" : "mt-1 pl-3 space-y-1"}
-              >
-                <SidebarItem
-                  icon={Server}
-                  label="Device List"
-                  labelClassName="text-2xl"
-                  active={activePage === "DeviceList"}
-                  collapsed={isCollapsed}
-                  onClick={() => go("DeviceList")}
-                  iconSizeCollapsed={56}
-                  iconSizeExpanded={50}
-                  iconColWidth={56}
-                  expandedPadding="px-4 py-2.5"
-                  collapsedPadding="px-3.5 py-2.5"
-                />
-                <SidebarItem
-                  icon={Wifi}
-                  label="Wireless Devices"
-                  labelClassName="text-2xl"
-                  active={activePage === "WirelessDevices"}
-                  collapsed={isCollapsed}
-                  onClick={() => go("WirelessDevices")}
-                  iconSizeCollapsed={56}
-                  iconSizeExpanded={50}
-                  iconColWidth={56}
-                  expandedPadding="px-4 py-2.5"
-                  collapsedPadding="px-3.5 py-2.5"
-                />
-              </motion.div>
-            )}
-          </AnimatePresence>
-
-          {/* Settings */}
-          <SidebarItem
-            icon={Settings}
-            label="Settings"
-            active={activePage === "Settings"}
-            collapsed={isCollapsed}
-            onClick={() => go("Settings")}
-            iconSizeCollapsed={56}
-            iconSizeExpanded={50}
-            iconColWidth={56}
-            labelClassName="text-4xl"
-            expandedPadding="px-4 py-3.5"
-            collapsedPadding="px-3.5 py-3"
-          />
-        </nav>
-
-        {/* 하단 상태 패널 */}
-        <div className="px-2 pb-2 pt-3 bg-gradient-to-t from-slate-700 via-slate-700/95 to-transparent">
-          <SidebarStatusPanel
-            isCollapsed={isCollapsed}
-            v2xReady={true}
-            freqMHz={5850}
-            bwMHz={10}
-            txCount={123456}
-            rxCount={987654}
-            gnss={{ fix: "3D-FIX", lat: 35.905806, lon: 126.520896, headingDeg: 92.48, speedKmh: 60 }}
-          />
-        </div>
+      {/* 하단 상태 패널 */}
+      <div className="pb-2 bg-gradient-to-t from-slate-700 via-slate-700/95 to-transparent">
+        <SidebarStatusPanel
+          isCollapsed={isCollapsed}
+          v2xReady={true}
+          freqMHz={5850}
+          bwMHz={10}
+          txCount={123456}
+          rxCount={987654} 
+          gnss={{ fix: "3D-FIX", lat: 35.905806, lon: 126.520896, headingDeg: 92.48, speedKmh: 60 }}
+        />
       </div>
     </aside>
   );

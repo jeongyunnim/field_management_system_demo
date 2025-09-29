@@ -4,7 +4,7 @@ import StartInspectionButton from "./StartInspectionButton";
 import StopInspectionButton from "./StopInspectionButton";
 import { useMqttStore } from "../stores/MqttStore";
 
-export default function Header({ activePage}) {
+export default function Header({ activePage }) {
   const [isInspecting, setIsInspecting] = useState(false);
   const pageMap = {
     Main: ["Main"],
@@ -31,14 +31,14 @@ export default function Header({ activePage}) {
   const onBegan = () => setIsInspecting(true);
   const onEnded = () => setIsInspecting(false);
   return (
-    <header className="flex items-center h-64 justify-between px-20 py-3 bg-[#121d2d] backdrop-blur shadow-sm">
+    <header className="flex h-24 items-center justify-between px-10 py-3 bg-[#121d2d]">
       {/* Breadcrumbs */}
-      <div className="flex items-center space-x-2 text-slate-400 text-4xl">
+      <div className="flex items-center space-x-1 text-slate-400 text-lg">
         <span>Home</span>
         {path.map((item, index) => (
           <span key={index} className="flex items-center space-x-2">
             <span>&gt;</span>
-            <span className={`${index === path.length - 1 ? "font-medium text-gray-100 " : ""}`}>
+            <span className={`${index === path.length - 1 ? "text-gray-100 " : ""}`}>
               {item}
             </span>
           </span>
@@ -46,7 +46,7 @@ export default function Header({ activePage}) {
       </div>
           
       {/* Action buttons */}
-      <div className="flex items-center space-x-10 text-4xl text-slate-100">
+      <div className="flex items-center space-x-3 text-2xl text-slate-100">
         <StartInspectionButton
           onStart={handleStart}
           className="shadow-sm"
