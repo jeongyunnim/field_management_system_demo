@@ -1,7 +1,7 @@
 // src/components/Header.jsx
 import { useEffect, useState } from "react";
-import StartInspectionButton from "./StartInspectionButton";
-import StopInspectionButton from "./StopInspectionButton";
+import StartInspectionButton from "./buttons/StartInspectionButton";
+import StopInspectionButton from "./buttons/StopInspectionButton";
 import { useMqttStore } from "../stores/MqttStore";
 
 export default function Header({ activePage }) {

@@ -1,4 +1,4 @@
-// src/components/PMTilesLayer.jsx
+// src/components/MonitorPMTilesLayer.jsx
 import { useEffect } from "react";
 import { useMap } from "react-leaflet";
 import * as pmtiles from "pmtiles";

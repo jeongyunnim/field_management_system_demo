@@ -4,14 +4,18 @@ import { useMqttStore } from "../stores/MqttStore";
 import { saveV2XMessage, msgDb } from "../dbms/v2x_msg_db";
 import { updateMessageCount, countDb } from "../dbms/v2x_count_db";
 import { saveGnssData, gnssDb } from "../dbms/gnss_db";
-import { Card } from "../components/Card";
-import RecentV2XCardList from "../components/RecentV2XCardList";
-import StationMap from "../components/StationMap";
-import { calculateDistanceKm } from "../utils/distance";
+import { Card } from "../components/common/Card";
+import MonitoringDeviceList from "../components/MonitoringDeviceList";
+import StationMapPanel from "../components/StationMapPanel";
 import { BookDashed, BookCheck, ShieldOff, ShieldCheck, RefreshCcw, Layers as DummyIcon } from "lucide-react";
-import SystemResourcePanel from "../components/SystemResourcePanel";
+import SystemResourcePanel from "../depretecated/SystemResourcePanel";
+import Led from "../components/common/Led";
+import SignalBars from "../components/common/SignalBars";
+import { rssiToBars } from "../utils/signal";
 
-export default function DeviceMonitoring() {
+// const snrBars = rssiToBars(selected?.rssi);
+
+export default function DeviceMonitoring({ embed = false, onVehiclePosition, onStatusUpdate }) {
   const intervalRef = useRef(null);
   const addMessageHandler = useMqttStore((s) => s.addMessageHandler);
   const subscribeTopics  = useMqttStore((s) => s.subscribeTopics);
@@ -26,6 +30,7 @@ export default function DeviceMonitoring() {
 
   const handleStatusUpdate = (l2id, status) => {
     setStationStatusMap((prev) => ({ ...prev, [l2id]: status }));
+    onStatusUpdate?.(l2id, status);
   };
 
   const REQ_TOPIC   = "fac/V2X_MAINTENANCE_HUB_CLIENT_PA/V2X_MAINTENANCE_HUB_PA/cv2xPktMsg/req";
@@ -33,80 +38,82 @@ export default function DeviceMonitoring() {
   const REQUEST_ID  = "abc12345";
   const hsRef = useRef({ inFlight:false, ack:false, timer:null, attempt:0 });
 
-  // useEffect(() => {
-  //   const topics = [
-  //     "fac/V2X_MAINTENANCE_HUB_PA/V2X_MAINTENANCE_HUB_CLIENT_PA/cv2xPktMsg/resp",
-  //     "fac/V2X_MAINTENANCE_HUB_PA/V2X_MAINTENANCE_HUB_CLIENT_PA/cv2xPktMsg/jsonMsg",
-  //     "fac/GNSS_PA/ALL/gpsData/jsonMsg",
-  //   ];
-  //   subscribeTopics(topics, { qos: 0 });
+  useEffect(() => {
+    const topics = [
+      "fac/V2X_MAINTENANCE_HUB_PA/V2X_MAINTENANCE_HUB_CLIENT_PA/cv2xPktMsg/resp",
+      "fac/V2X_MAINTENANCE_HUB_PA/V2X_MAINTENANCE_HUB_CLIENT_PA/cv2xPktMsg/jsonMsg",
+      "fac/GNSS_PA/ALL/gpsData/jsonMsg",
+    ];
+    subscribeTopics(topics, { qos: 0 });
 
-  //   const off = addMessageHandler(async (topic, message) => {
-  //     if (topic.endsWith("/cv2xPktMsg/jsonMsg")) {
-  //       try {
-  //         const payload = JSON.parse(message.toString());
-  //         let psid = null;
-  //         try {
-  //           psid = payload?.hdr16093?.transport?.bcMode?.destAddress?.extension?.content ?? null;
-  //         } catch {}
-  //         const l2idSrc = payload?.rxParams?.l2idSrc ?? null;
+    const off = addMessageHandler(async (topic, message) => {
+      if (topic.endsWith("/cv2xPktMsg/jsonMsg")) {
+        try {
+          const payload = JSON.parse(message.toString());
+          let psid = null;
+          try {
+            psid = payload?.hdr16093?.transport?.bcMode?.destAddress?.extension?.content ?? null;
+          } catch {}
+          const l2idSrc = payload?.rxParams?.l2idSrc ?? null;
 
-  //         let rssi = null;
-  //         try {
-  //           const arr = payload?.rxParams?.rssiDbm8;
-  //           if (Array.isArray(arr) && arr.length > 0) {
-  //             const maxRaw = Math.max(...arr);
-  //             rssi = Math.round((maxRaw / 8) * 10) / 10;
-  //           }
-  //         } catch {}
+          let rssi = null;
+          try {
+            const arr = payload?.rxParams?.rssiDbm8;
+            if (Array.isArray(arr) && arr.length > 0) {
+              const maxRaw = Math.max(...arr);
+              rssi = Math.round((maxRaw / 8) * 10) / 10;
+            }
+          } catch {}
 
-  //         if (psid != null && l2idSrc != null) {
-  //           await updateMessageCount({ psid: String(psid), l2idSrc: String(l2idSrc), rssi });
-  //         }
-  //       } catch (e) {
-  //         console.warn("cv2x JSON parse error:", e);
-  //       }
-  //       return;
-  //     }
+          if (psid != null && l2idSrc != null) {
+            await updateMessageCount({ psid: String(psid), l2idSrc: String(l2idSrc), rssi });
+          }
+        } catch (e) {
+          console.warn("cv2x JSON parse error:", e);
+        }
+        return;
+      }
 
-  //     if (topic === "fac/GNSS_PA/ALL/gpsData/jsonMsg")) {
-  //       try {
-  //         const payload = JSON.parse(message.toString());
-  //         if (payload?.data) {
-  //           await saveGnssData(payload.data);
-  //           const { latitude, longitude } = payload.data;
-  //           if (latitude && longitude) {
-  //             const headingDeg = (payload.data.heading ?? 0) / 100;
-  //             setVehiclePosition({ latitude, longitude, heading: headingDeg });
-  //           }
-  //         }
-  //       } catch (e) {
-  //         console.warn("GNSS JSON parse failed:", e);
-  //       }
-  //       return;
-  //     }
+      if (topic === "fac/GNSS_PA/ALL/gpsData/jsonMsg") {
+        try {
+          const payload = JSON.parse(message.toString());
+          if (payload?.data) {
+            await saveGnssData(payload.data);
+            const { latitude, longitude } = payload.data;
+            if (latitude && longitude) {
+              const headingDeg = (payload.data.heading ?? 0) / 100;
+              const vp = { latitude, longitude, heading: headingDeg };
+              setVehiclePosition(vp);
+              onVehiclePosition?.(vp);
+            }
+          }
+        } catch (e) {
+          console.warn("GNSS JSON parse failed:", e);
+        }
+        return;
+      }
 
-  //     if (topic.endsWith(RESP_SUFFIX)) {
-  //       try {
-  //         const payload = JSON.parse(message.toString());
-  //         if (payload.status === "ok" && (!payload.requestId || payload.requestId === REQUEST_ID)) {
-  //           hsRef.current.ack = true;
-  //         }
-  //       } catch (e) {
-  //         console.warn("cv2x resp JSON parse error:", e);
-  //       }
-  //       return;
-  //     }
-  //   });
+      if (topic.endsWith(RESP_SUFFIX)) {
+        try {
+          const payload = JSON.parse(message.toString());
+          if (payload.status === "ok" && (!payload.requestId || payload.requestId === REQUEST_ID)) {
+            hsRef.current.ack = true;
+          }
+        } catch (e) {
+          console.warn("cv2x resp JSON parse error:", e);
+        }
+        return;
+      }
+    });
 
-  //   if (connected) startSubscribeHandshake(1, 3000);
+    if (connected) startSubscribeHandshake(1, 3000);
 
-  //   return () => {
-  //     off();
-  //     unsubscribeTopics(topics);
-  //     cancelSubscribeHandshake();
-  //   };
-  // }, [addMessageHandler, subscribeTopics, unsubscribeTopics, publish, connected]);
+    return () => {
+      off();
+      unsubscribeTopics(topics);
+      cancelSubscribeHandshake();
+    };
+  }, [addMessageHandler, subscribeTopics, unsubscribeTopics, publish, connected]);
 
   const sendSubscribeOnce = () => {
     return publish(
@@ -173,13 +180,13 @@ export default function DeviceMonitoring() {
   }
 
   return (
-    <div className="grid grid-cols-[2fr_1fr] w-full h-full gap-3 relative">
+    <div className="grid w-full h-full">
       {/* 좌: 요약 + 리스트 */}
-      <Card className="p-4 overflow-hidden">
+      <Card className="p-4 overflow-hidden flex flex-col min-h-0">
         <div className="flex items-start justify-between mb-3">
           <h2 className="main-card-title">장치 모니터링</h2>
-          <div className="flex gap-2">
-            <button className="btn-sm btn-text-sm inline-flex items-center gap-1" onClick={() => seedDemoData({ stations: 10 })} disabled={loading} title="더미 데이터 추가">
+          <div className="flex gap-2" >
+          <button className="btn-sm btn-text-sm inline-flex items-center gap-1" onClick={() => seedDemoData({ stations: 10 })} disabled={loading} title="더미 데이터 추가">
               <DummyIcon size={16} /> 더미 데이터
             </button>
             <button className="btn-sm btn-text-sm inline-flex items-center gap-1" onClick={async () => {
@@ -198,44 +205,14 @@ export default function DeviceMonitoring() {
         <SummaryPanel selected={selected} />
 
         {/* 하단 리스트(클릭 → 위 패널 갱신) */}
-        <div className="mt-4 overflow-y-auto pr-1" style={{ maxHeight: "calc(100% - 220px)" }}>
-          <RecentV2XCardList
+        <div className="mt-4 min-h-0" style={{ height: "calc(100% - 220px)" }}>
+          <MonitoringDeviceList
+            className="h-full"
             selectedId={selected?.l2id}
             onSelect={(it) => setSelected(it)}
           />
         </div>
       </Card>
-
-      {/* 우: 지도 그대로 유지 */}
-      <Card className="border-l border-gray-300 h-full">
-        <StationMap
-          latitude={vehiclePosition?.latitude}
-          longitude={vehiclePosition?.longitude}
-          heading={vehiclePosition?.heading}
-          stations={Object.entries(stationStatusMap)
-            .filter(([_, s]) => s.gnss_data?.latitude && s.gnss_data?.longitude)
-            .map(([l2id, status]) => {
-              const lat = status.gnss_data.latitude / 1e7;
-              const lon = status.gnss_data.longitude / 1e7;
-              let distanceKm = null;
-              if (vehiclePosition?.latitude && vehiclePosition?.longitude) {
-                const vehLat = vehiclePosition.latitude / 1e7;
-                const vehLon = vehiclePosition.longitude / 1e7;
-                distanceKm = calculateDistanceKm(vehLat, vehLon, lat, lon);
-              }
-              return { lat, lon, name: `Station ${l2id}`, l2id, distanceKm };
-            })}
-        />
-      </Card>
-
-      {loading && (
-        <div className="absolute inset-0 bg-black/30 backdrop-blur-[1px] flex items-center justify-center z-10">
-          <div className="text-center">
-            <div className="animate-spin rounded-full h-12 w-12 border-4 border-transparent border-t-emerald-400 mx-auto mb-3" />
-            <div className="text-slate-200 font-semibold">작업 중…</div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
@@ -266,9 +243,7 @@ function SummaryPanel({ selected }) {
           </div>
         </div>
         <div className="col-start-6 col-span-5 flex items-end gap-1 mb-2" aria-label="신호 세기">
-          {Array.from({ length: 4 }).map((_, i) => (
-            <span key={i} className={`w-1.5 rounded-sm ${i < snrBars ? "bg-[#28B555]" : "bg-slate-600"}`} style={{ height: `${8 + i * 6}px` }} />
-          ))}
+          <SignalBars bars={snrBars} />
           <span className="ml-2">60 dBm</span>
         </div>
         <div className="col-span-2 device-inspection-icon-btn bg-rose-900/90">
@@ -324,22 +299,4 @@ function SummaryPanel({ selected }) {
       </div>
     </div>
   );
-}
-
-/* ---------------- UI bits ---------------- */
-function Led({ on }) {
-  return (
-    <span
-      aria-label={on ? "활성" : "비활성"}
-      className={`inline-block h-3.5 w-3.5 rounded-full shadow-inner ring-1 ${on ? "bg-emerald-500 ring-emerald-300/40 animate-pulse" : "bg-slate-500 ring-slate-300/30"}`}
-    />
-  );
-}
-
-function rssiToBars(rssi) {
-  if (rssi == null) return 1;
-  if (rssi >= -55) return 4;
-  if (rssi >= -65) return 3;
-  if (rssi >= -75) return 2;
-  return 1;
 }

@@ -7,10 +7,6 @@ import "leaflet/dist/leaflet.css";
 
 createRoot(document.getElementById("root")).render(
   <StrictMode>
-    <head>
-      <link rel="icon" type="image/svg+xml" href="/public/favicon.ico" />
-      <title>Dynavista FMS</title>
-    </head>
     <App />
   </StrictMode>
 );

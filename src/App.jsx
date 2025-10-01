@@ -1,17 +1,17 @@
 // src/App.jsx
-import { useState, useMemo, useLayoutEffect } from "react";
-import mqtt from "mqtt";
+import { useState, useMemo, useLayoutEffect, useEffect } from "react";
+// import mqtt from "mqtt"; // 스토어 내부에서 관리
 import { useMqttStore } from "./stores/MqttStore";
-import Sidebar from "./components/Sidebar";
+import Sidebar from "./components/sidebar/Sidebar.jsx";
 import Header from "./components/Header";
 
-import Main from "./pages/Main";
+import Home from "./pages/Home.jsx";
 import DeviceList from "./pages/DeviceList.jsx";
 import RegisterDevice from "./pages/RegisterDevice.jsx";
-import EditDevice from "./pages/EditDevice.jsx";
-import WirelessDevices from "./pages/WirelessDevices";
+import DeviceMonitoring from "./pages/DeviceMonitoring.jsx";
 import V2XTest from "./pages/V2XTest.jsx";
 import Settings from "./pages/Settings.jsx";
+import StationMapPanel from "./components/StationMapPanel.jsx";
 
 const DESIGN_W = 2560;
 const DESIGN_H = 1400;
@@ -29,33 +29,40 @@ function useViewportScale() {
 }
 
 export default function App() {
-  const [activePage, setActivePage] = useState("Main");
+  const [activePage, setActivePage] = useState("Home");
   const [isCollapsed, setIsCollapsed] = useState(false);
   const scale = useViewportScale();
+  const [vehiclePosition, setVehiclePosition] = useState(null);
+  const [stationStatusMap, setStationStatusMap] = useState({});
   
-  /**
-   *  MQTT 초기화
-   */
-  // const connect = useMqttStore((s) => s.connect);
-  // const disconnect = useMqttStore((s) => s.disconnect)
+  /** MQTT 초기화 */
+  const connect = useMqttStore((s) => s.connect);
+  const disconnect = useMqttStore((s) => s.disconnect);
 
-  // useEffect(() => {
-  //   connect();
-  //   return () => disconnect();
-  // }, [connect, disconnect]);
+  useEffect(() => {
+    connect();
+    return () => disconnect();
+  }, [connect, disconnect]);
 
-  const renderPage = () => {
+  const renderCenter = () => {
     switch (activePage) {
-      case "Main":
-        return <Main />;
+      case "Home":
+        return <Home />;
       case "DeviceList":
-        return <DeviceList setActivePage={setActivePage} />;
+        return <DeviceList embed setActivePage={setActivePage} />;
       case "RegisterDevice":
         return <RegisterDevice setActivePage={setActivePage} />;
-      case "EditDevice":
-        return <EditDevice setActivePage={setActivePage} />;
-      case "WirelessDevices":
-        return <WirelessDevices />;
+      case "DeviceMonitoring":
+        return (
+          <DeviceMonitoring
+            embed
+            setActivePage={setActivePage}
+            onVehiclePosition={setVehiclePosition}
+            onStatusUpdate={(l2id, status) =>
+              setStationStatusMap((prev) => ({ ...prev, [l2id]: status }))
+            }
+          />
+        );
       case "V2XTest":
         return <V2XTest />;
       case "Settings":
@@ -82,9 +89,22 @@ export default function App() {
             activePage={activePage}
           />
 
-          {/* ✅ Page content */}
+          {/* ✅ Two-pane layout only for DeviceList/DeviceMonitoring */}
           <main className="w-full flex-1 min-h-0 p-7">
-            {renderPage()}
+            {activePage === "DeviceList" || activePage === "DeviceMonitoring" ? (
+              <div className="grid grid-cols-[2fr_1fr] w-full h-full gap-3">
+                <div className="min-h-0">
+                  {renderCenter()}
+                </div>
+                <StationMapPanel
+                  vehiclePosition={vehiclePosition}
+                  stationStatusMap={stationStatusMap}
+                  className="h-full"
+                />
+              </div>
+            ) : (
+              renderCenter()
+            )}
           </main>
         </div>
       </div>

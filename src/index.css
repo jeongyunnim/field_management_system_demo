@@ -3,7 +3,10 @@
 @tailwind components;
 @tailwind utilities;
 
-/* 예시용: 페이지 전환 시 부드러운 전환 효과 */
+/***************************************************************
+ * [전역]
+ ***************************************************************/
+
 html {
   scroll-behavior: smooth;
 }
@@ -20,10 +23,6 @@ html {
     backdrop-blur-sm;
 }
 
-.side-status-title {
-  @apply text-xs
-}
-
 .btn-text {
   @apply text-2xl font-medium
 }
@@ -36,17 +35,34 @@ html {
     transition duration-200;
 
   @apply border border-white/20
-    ring-1 ring-slate-900/10
-    backdrop-blur-sm;
+  ring-1 ring-slate-900/10
+  backdrop-blur-sm;
 }
 
 .btn-text-sm {
   @apply text-lg font-medium
 }
 
+.main-card-title {
+  @apply text-2xl font-semibold
+}
+
+/***************************************************************
+* [사이드바]
+***************************************************************/
+
 .fms-bt {
   @apply border-b-2 border-b-slate-600 mb-2
 }
+
+
+.side-status-title {
+  @apply text-xs
+}
+
+/***************************************************************
+ * [모니터링]
+ ***************************************************************/
 
 .device-inspection-icon-btn {
   @apply flex flex-col space-y-2 place-items-center justify-center
@@ -59,3 +75,4 @@ html {
     ring-1 ring-slate-900/10
     backdrop-blur-sm;
 }
+

@@ -1,6 +1,6 @@
 // src/components/StationMap.jsx
 import { useMapEvents, MapContainer, Marker, Popup, useMap } from "react-leaflet";
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, memo } from "react";
 import L from "leaflet";
 import markerIcon2x from "leaflet/dist/images/marker-icon-2x.png";
 import markerIcon from "leaflet/dist/images/marker-icon.png";
@@ -32,15 +32,6 @@ const stationIcon = new L.Icon({
   popupAnchor: [0, -32],
 });
 
-// ✅ 기본 중심(값 없을 때)
-const DEFAULT_CENTER = { lat: 37.5665, lon: 126.9780 }; // 서울시청
-// ✅ 샘플 스테이션(없으면 임시로 뿌림)
-const makeSampleStations = (c = DEFAULT_CENTER) => ([
-  { name: "Sample A", l2id: "A001", lat: c.lat + 0.003, lon: c.lon + 0.003, distanceKm: 0.5 },
-  { name: "Sample B", l2id: "B002", lat: c.lat - 0.002, lon: c.lon + 0.004, distanceKm: 1.2 },
-  { name: "Sample C", l2id: "C003", lat: c.lat + 0.004, lon: c.lon - 0.002, distanceKm: 2.8 },
-]);
-
 // 1e7 스케일/소수 둘 다 지원 + 유효성 체크
 function normalizeLatLon(rawLat, rawLon) {
   const isFiniteNum = (v) => typeof v === "number" && Number.isFinite(v);
@@ -55,9 +46,14 @@ function normalizeLatLon(rawLat, rawLon) {
   if (!(typeof lat === "number" && Math.abs(lat) <= 90)) lat = null;
   if (!(typeof lon === "number" && Math.abs(lon) <= 180)) lon = null;
 
-  // 둘 중 하나라도 없다면 기본값
-  if (lat == null || lon == null) return { ...DEFAULT_CENTER, isFallback: true };
-  return { lat, lon, isFallback: false };
+  // 좌표가 없으면 기본 좌표(서울 시청)로 대체하여 지도를 항상 표시
+  const isFallback = !(lat != null && lon != null);
+  if (isFallback) {
+    lat = 37.5665;
+    lon = 126.9780;
+  }
+
+  return { lat, lon, isFallback };
 }
 
 // PMTiles(벡터) 레이어
@@ -190,22 +186,16 @@ function MapControl({ autoFollow, setAutoFollow }) {
   return null;
 }
 
-export default function StationMap({
+function StationMapImpl({
   latitude,
   longitude,
   heading = 0,
   stations = [],
-  useFallbackWhenEmpty = true, // ★ 값 없을 때 임의 값 쓸지 여부
 }) {
   // 항상 맵은 렌더 → 좌표가 없으면 기본 좌표 사용
   const norm = normalizeLatLon(latitude, longitude);
   const center = { lat: norm.lat, lon: norm.lon };
   const isFallback = norm.isFallback;
-
-  // 스테이션 데이터 없으면 샘플 생성
-  const stationsToShow = (stations && stations.length > 0)
-    ? stations
-    : (useFallbackWhenEmpty ? makeSampleStations(center) : []);
 
   const [autoFollow, setAutoFollow] = useState(true);
 
@@ -228,16 +218,11 @@ export default function StationMap({
         <Popup>
           차량 위치<br />
           {center.lat.toFixed(6)}, {center.lon.toFixed(6)}
-          {isFallback && (
-            <>
-              <br /><em>(임시 위치 — 입력 좌표 없음)</em>
-            </>
-          )}
         </Popup>
       </Marker>
 
       {/* 스테이션 마커 */}
-      {stationsToShow.map((station, idx) => (
+      {(stations || []).map((station, idx) => (
         <Marker key={idx} position={[station.lat, station.lon]} icon={stationIcon}>
           <Popup>
             <strong>{station.name ?? `Station #${idx + 1}`}</strong><br />
@@ -253,9 +238,11 @@ export default function StationMap({
         </Marker>
       ))}
 
-      <RecenterMap lat={center.lat} lon={center.lon} autoFollow={autoFollow} />
+      <RecenterMap lat={center.lat} lon={center.lon} autoFollow={autoFollow && !isFallback} />
       <MapInteractions onUserInteract={() => setAutoFollow(false)} />
       <MapControl autoFollow={autoFollow} setAutoFollow={setAutoFollow} />
     </MapContainer>
   );
 }
+
+export default memo(StationMapImpl);

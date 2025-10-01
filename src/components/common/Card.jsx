@@ -1,4 +1,6 @@
-export function Card({ className = "", children }) {
+import { memo } from "react";
+
+function CardImpl({ className = "", children }) {
   return (
     <section
       className={[
@@ -13,6 +15,8 @@ export function Card({ className = "", children }) {
     </section>
   );
 }
+
+export const Card = memo(CardImpl);
 
 /**
 [예시]
