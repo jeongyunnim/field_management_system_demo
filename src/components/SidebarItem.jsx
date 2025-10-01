@@ -72,7 +72,7 @@ export default function SidebarItem({
     );
   }
 
-  // ── 펼침: 2열 그리드(아이콘 칼럼 48px 고정)로 간격 통일
+  // ── 펼침: 2열 그리드로 간격 통일
   return (
     <div className={`w-full ${className}`}>
       <button

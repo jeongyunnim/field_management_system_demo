@@ -35,7 +35,7 @@ export default function StartInspectionButton({
             "absolute left-5 top-1/2 -translate-y-1/2 rounded-full w-3.5 h-3.5",
             disabled ? "bg-white/50" : "bg-white/90",
           ].join(" ")} />
-          <span className="ml-2 pointer-events-none mx-auto whitespace-nowrap tracking-tight">
+          <span className="ml-3 pointer-events-none mx-auto whitespace-nowrap tracking-tight">
             점검 시작
           </span>
         </button>

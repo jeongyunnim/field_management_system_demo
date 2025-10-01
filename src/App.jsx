@@ -66,7 +66,7 @@ export default function App() {
   };
 
   return (
-    <div className="h-dvh w-dvw bg-[#0f172a] flex items-center justify-center">
+    <div className="h-dvh w-dvw bg-[#121d2d] flex items-center justify-center">
       <div className="w-1/5 flex flex-1 h-full min-h-0">
         {/* Sidebar */}
         <Sidebar

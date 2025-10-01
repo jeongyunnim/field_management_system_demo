@@ -15,7 +15,7 @@ export default function Sidebar({ activePage, setActivePage, isCollapsed, setIsC
   return (
     <aside
       className={`${
-        isCollapsed ? "w-1/7" : "w-1/5"
+        isCollapsed ? "w-1/8" : "w-1/6"
       } h-full bg-slate-700 text-slate-100 transition-all duration-300 flex flex-col`}
     >
       <div className="relative border-b border-slate-600/40">
@@ -47,48 +47,26 @@ export default function Sidebar({ activePage, setActivePage, isCollapsed, setIsC
           collapsed={isCollapsed}
           onClick={() => go("Main")}
         />
-
-        {/* Monitoring (토글) */}
+        {/* 장치 관리 */}
         <SidebarItem
-          icon={Monitor}
-          label="Monitoring"
-          active={isMonitoringActive}
+          icon={Server}
+          label="장치 관리"
+          active={activePage === "DeviceList"}
           collapsed={isCollapsed}
-          onClick={() => toggle("monitoring")}
+          onClick={() => go("DeviceList")}
         />
-
-        {/* 하위 메뉴 (접힘/펼침 공통) */}
-        <AnimatePresence>
-          {open.monitoring && (
-            <motion.div
-              initial={{ opacity: 0, y: -6 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -6 }}
-              transition={{ duration: 0.18 }}
-              className={isCollapsed ? "mt-1 space-y-1" : "mt-1 pl-3 space-y-1"}
-            >
-              <SidebarItem
-                icon={Server}
-                label="Device List"
-                active={activePage === "DeviceList"}
-                collapsed={isCollapsed}
-                onClick={() => go("DeviceList")}
-              />
-              <SidebarItem
-                icon={Wifi}
-                label="Wireless Devices"
-                active={activePage === "WirelessDevices"}
-                collapsed={isCollapsed}
-                onClick={() => go("WirelessDevices")}
-              />
-            </motion.div>
-          )}
-        </AnimatePresence>
-
+        {/* 장치 모니터링 */}
+        <SidebarItem
+          icon={Wifi}
+          label="장치 모니터링"
+          active={activePage === "WirelessDevices"}
+          collapsed={isCollapsed}
+          onClick={() => go("WirelessDevices")}
+        />
         {/* Settings */}
         <SidebarItem
           icon={Settings}
-          label="Settings"
+          label="설정"
           active={activePage === "Settings"}
           collapsed={isCollapsed}
           onClick={() => go("Settings")}

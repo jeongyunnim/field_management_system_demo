@@ -8,9 +8,9 @@ export default function Header({ activePage }) {
   const [isInspecting, setIsInspecting] = useState(false);
   const pageMap = {
     Main: ["Main"],
-    DeviceList: ["Monitoring", "Device List"],
-    WirelessDevices: ["Monitoring", "WirelessDevices"],
-    Settings: ["Settings"],
+    DeviceList: ["장치 관리"],
+    WirelessDevices: ["장치 모니터링"],
+    Settings: ["설정"],
   };
   const path = pageMap[activePage] || [activePage];
 
@@ -60,7 +60,7 @@ export default function Header({ activePage }) {
           disabled={!isInspecting} // 점검 중일 때만 활성
           onEnded={onEnded}
         />
-        <div>
+        <div className="text-lg">
           {/* 사용자 이미지 넣기? */}
           TEST_USER1
         </div>

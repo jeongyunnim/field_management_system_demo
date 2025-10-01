@@ -7,7 +7,7 @@ const Badge = ({ ok, lte = false }) => (
   <span
     className={`inline-block h-3 w-10 rounded-full shadow 
       ${ok ? "bg-[#32E36C] animate-pulse" : "bg-rose-500 "}
-      ${lte ? "mr-3" : "mr-2"}
+      ${lte ? "mr-1" : ""}
       `}
   />
 );

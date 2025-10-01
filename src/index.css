@@ -47,3 +47,15 @@ html {
 .fms-bt {
   @apply border-b-2 border-b-slate-600 mb-2
 }
+
+.device-inspection-icon-btn {
+  @apply flex flex-col space-y-2 place-items-center justify-center
+    py-2 rounded-xl font-semibold
+    shadow-md
+    active:scale-95
+    transition duration-200;
+
+  @apply border border-white/40
+    ring-1 ring-slate-900/10
+    backdrop-blur-sm;
+}
