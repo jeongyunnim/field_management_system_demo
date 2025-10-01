@@ -1,4 +1,4 @@
-// src/pages/WirelessDevices.jsx
+// src/pages/DeviceMonitoring.jsx
 import { useEffect, useRef, useState, useMemo } from "react";
 import { useMqttStore } from "../stores/MqttStore";
 import { saveV2XMessage, msgDb } from "../dbms/v2x_msg_db";
@@ -11,7 +11,7 @@ import { calculateDistanceKm } from "../utils/distance";
 import { BookDashed, BookCheck, ShieldOff, ShieldCheck, RefreshCcw, Layers as DummyIcon } from "lucide-react";
 import SystemResourcePanel from "../components/SystemResourcePanel";
 
-export default function WirelessDevices() {
+export default function DeviceMonitoring() {
   const intervalRef = useRef(null);
   const addMessageHandler = useMqttStore((s) => s.addMessageHandler);
   const subscribeTopics  = useMqttStore((s) => s.subscribeTopics);
@@ -177,7 +177,7 @@ export default function WirelessDevices() {
       {/* 좌: 요약 + 리스트 */}
       <Card className="p-4 overflow-hidden">
         <div className="flex items-start justify-between mb-3">
-          <h2 className="text-3xl font-semibold">장치 모니터링</h2>
+          <h2 className="main-card-title">장치 모니터링</h2>
           <div className="flex gap-2">
             <button className="btn-sm btn-text-sm inline-flex items-center gap-1" onClick={() => seedDemoData({ stations: 10 })} disabled={loading} title="더미 데이터 추가">
               <DummyIcon size={16} /> 더미 데이터
