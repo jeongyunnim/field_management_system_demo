@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { deviceDb } from "../dbms/device_db";
 import { Card } from "../components/common/Card";
 import { ZoomIn, Trash2 as Trash, RefreshCcw as Sync, Pencil } from "lucide-react";
-import StationMapPanel from "../components/StationMapPanel";
+import StationMapPanel from "../components/monitor/StationMapPanel";
 
 export default function DeviceList({ setActivePage, embed = false }) {
   const [loading, setLoading] = useState(false);
@@ -25,40 +25,6 @@ export default function DeviceList({ setActivePage, embed = false }) {
 
   useEffect(() => {
     loadDevices();
-
-    /** DEMO: 더미 데이터 (비활성화) */
-    // (async () => {
-    //   const count = await deviceDb.devices.count();
-    //   if (count === 0) {
-    //     await deviceDb.devices.bulkAdd([
-    //       {
-    //         id: 1,
-    //         serial: "K8QR2A2V10001",
-    //         model: "Smart-RSU",
-    //         latitude: 37.5665,
-    //         longtitude: 126.9780,
-    //         registeredAt: new Date().toISOString(),
-    //       },
-    //       {
-    //         id: 2,
-    //         serial: "K8QR2A1V01001",
-    //         model: "Small-RSE",
-    //         latitude: 35.1796,
-    //         longtitude: 129.0756,
-    //         registeredAt: new Date().toISOString(),
-    //       },
-    //       {
-    //         id: 3,
-    //         serial: "K8QR2A1V01024",
-    //         model: "Small-RSE",
-    //         latitude: 37.4563,
-    //         longtitude: 126.7052,
-    //         registeredAt: new Date().toISOString(),
-    //       },
-    //     ]);
-    //     await loadDevices();
-    //   }
-    // })();
   }, []);
 
   async function handleDelete(id) {

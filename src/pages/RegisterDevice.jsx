@@ -3,10 +3,14 @@ import { useState } from "react";
 import { deviceDb } from "../dbms/device_db";
 import { getL2IDFromMac, checkDuplication } from "../utils/utils";
 
+
+// ++id, serial, model, latityde, longtitude, registeredAt
+
 export default function RegisterDevice({ setActivePage }) {
+  const [serial, setSerial] = useState("");
+  const [model, setModel] = useState("");
   const [ipv4, setIpv4] = useState("");
   const [ipv6, setIpv6] = useState("");
-  const [mac, setMac] = useState("");
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -16,23 +20,28 @@ export default function RegisterDevice({ setActivePage }) {
       return;
     }
 
-    const l2id = getL2IDFromMac(mac);
-    if (l2id === null) {
-      alert("유효한 MAC 주소 형식이 아닙니다. (예: 00:11:22:33:44:55)");
-      return;
+    // const l2id = getL2IDFromMac(mac);
+    // if (l2id === null) {
+    //   alert("유효한 MAC 주소 형식이 아닙니다. (예: 00:11:22:33:44:55)");
+    //   return;
+    // }
+
+    if (!serial) {
+      alert("serial 번호를 입력해주세요.");
+      return ;
     }
 
-    const { allow } = await checkDuplication({ mac, l2id });
+    const { allow } = await checkDuplication({ serial });
     if (!allow) return;
 
     const registeredAt = new Date().toISOString();
 
     try {
       await deviceDb.devices.add({
-        ipv4: ipv4 || null,
-        ipv6: ipv6 || null,
-        mac,
-        l2id,
+        serial: serial || null,
+        model: model || null,
+        latityde,
+        longtitude,
         registeredAt
       });
 
@@ -40,7 +49,7 @@ export default function RegisterDevice({ setActivePage }) {
       setActivePage("DeviceList");
     } catch (err) {
       console.error("등록 실패:", err);
-      alert("디바이스 등록 중 오류 발생");
+      alert("디바이스 등록 실패");
     }
   };
 
@@ -51,33 +60,43 @@ export default function RegisterDevice({ setActivePage }) {
       </h2>
       <form onSubmit={handleSubmit} className="space-y-4">
         <div>
-          <label className="block text-sm font-medium">MAC 주소</label>
+          <label className="block text-sm font-medium">Serial Number</label>
           <input
             type="text"
-            value={mac}
-            onChange={(e) => setMac(e.target.value.trim())}
-            placeholder="예: 00:11:22:33:44:55"
-            className="w-full px-3 py-2 border rounded dark:bg-gray-800"
+            value={serial}
+            onChange={(e) => setSerial(e.target.value.trim())}
+            placeholder="예: K8QR2A2V10001"
+            className="w-full px-3 py-2 border rounded"
             required
           />
         </div>
         <div>
-          <label className="block text-sm font-medium">IPv4 주소</label>
+          <label className="block text-sm font-medium">모델</label>
+          <input
+            type="text"
+            value={model}
+            onChange={(e) => setModel(e.target.value)}
+            className="w-full px-3 py-2 border rounded"
+            placeholder="예: Smart-RSU"
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-medium">IPv4</label>
           <input
             type="text"
             value={ipv4}
             onChange={(e) => setIpv4(e.target.value)}
-            className="w-full px-3 py-2 border rounded dark:bg-gray-800"
+            className="w-full px-3 py-2 border rounded"
             placeholder="예: 192.168.0.1"
           />
         </div>
         <div>
-          <label className="block text-sm font-medium">IPv6 주소</label>
+          <label className="block text-sm font-medium">IPv6</label>
           <input
             type="text"
             value={ipv6}
             onChange={(e) => setIpv6(e.target.value)}
-            className="w-full px-3 py-2 border rounded dark:bg-gray-800"
+            className="w-full px-3 py-2 border rounded"
             placeholder="예: fe80::1"
           />
         </div>

@@ -9,29 +9,12 @@ import Home from "./pages/Home.jsx";
 import DeviceList from "./pages/DeviceList.jsx";
 import RegisterDevice from "./pages/RegisterDevice.jsx";
 import DeviceMonitoring from "./pages/DeviceMonitoring.jsx";
-import V2XTest from "./pages/V2XTest.jsx";
 import Settings from "./pages/Settings.jsx";
-import StationMapPanel from "./components/StationMapPanel.jsx";
-
-const DESIGN_W = 2560;
-const DESIGN_H = 1400;
-
-
-function useViewportScale() {
-  const [size, setSize] = useState({ w: window.innerWidth, h: window.innerHeight });
-  useLayoutEffect(() => {
-    const onResize = () => setSize({ w: window.innerWidth, h: window.innerHeight });
-    window.addEventListener("resize", onResize);
-    return () => window.removeEventListener("resize", onResize);
-  }, []);
-  const scale = useMemo(() => Math.min(size.w / DESIGN_W, size.h / DESIGN_H), [size.w, size.h]);
-  return scale;
-}
+import StationMapPanel from "./components/monitor/StationMapPanel.jsx";
 
 export default function App() {
   const [activePage, setActivePage] = useState("Home");
   const [isCollapsed, setIsCollapsed] = useState(false);
-  const scale = useViewportScale();
   const [vehiclePosition, setVehiclePosition] = useState(null);
   const [stationStatusMap, setStationStatusMap] = useState({});
   
@@ -49,13 +32,12 @@ export default function App() {
       case "Home":
         return <Home />;
       case "DeviceList":
-        return <DeviceList embed setActivePage={setActivePage} />;
+        return <DeviceList setActivePage={setActivePage} />;
       case "RegisterDevice":
         return <RegisterDevice setActivePage={setActivePage} />;
       case "DeviceMonitoring":
         return (
           <DeviceMonitoring
-            embed
             setActivePage={setActivePage}
             onVehiclePosition={setVehiclePosition}
             onStatusUpdate={(l2id, status) =>

@@ -25,7 +25,7 @@ export default function Sidebar({ activePage, setActivePage, isCollapsed, setIsC
           className="absolute inset-y-0 right-0 inline-flex items-center justify-center"
           aria-label={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
         >
-          <div className="p-2">{isCollapsed ? <ChevronRight size={36} /> : <ChevronLeft size={36} />}</div>
+          <div className="pl-4">{isCollapsed ? <ChevronRight size={36} /> : <ChevronLeft size={36} />}</div>
         </button>
 
         <div className="h-24 flex items-center justify-center px-4">

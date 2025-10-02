@@ -31,7 +31,7 @@ export default function Header({ activePage }) {
   const onBegan = () => setIsInspecting(true);
   const onEnded = () => setIsInspecting(false);
   return (
-    <header className="flex h-24 items-center justify-between px-10 py-3 bg-[#121d2d]">
+    <header className="flex h-20 items-center justify-between px-10 py-3 bg-[#121d2d]">
       {/* Breadcrumbs */}
       <div className="flex items-center space-x-1 text-slate-400 text-lg">
         <span>Home</span>

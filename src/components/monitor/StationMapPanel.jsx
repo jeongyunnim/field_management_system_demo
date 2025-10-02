@@ -1,8 +1,8 @@
 // src/components/StationMapPanel.jsx
 import { memo, useMemo } from "react";
-import { Card } from "./common/Card";
+import { Card } from "../common/Card";
 import StationMap from "./StationMap";
-import { calculateDistanceKm } from "../utils/distance";
+import { calculateDistanceKm } from "../../utils/distance";
 
 function buildStations(stationStatusMap = {}, vehiclePosition) {
   const entries = Object.entries(stationStatusMap);

@@ -49,7 +49,7 @@ export default function SidebarStatusPanel({
         "
       >
         {/* 헤더 */}
-        <div className="flex items-center justify-between m-3">
+        <div className="flex items-center justify-between m-3 space-x-2">
           <div className="flex items-center gap-2 text-slate-200">
             <Activity size={20} className="opacity-80" />
             {!isCollapsed && <span className="text-sm font-semibold">V2X-FMS</span>}

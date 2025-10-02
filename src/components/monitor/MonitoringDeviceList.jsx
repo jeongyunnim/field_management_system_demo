@@ -1,11 +1,11 @@
 // src/components/MonitoringDeviceList.jsx
 import { useEffect, useMemo, useRef, useState } from "react";
-import { countDb } from "../dbms/v2x_count_db";
-import { deviceDb } from "../dbms/device_db";
-import Donut, { healthColorForPct } from "./common/Donut";
-import Led from "./common/Led";
-import SignalBars from "./common/SignalBars";
-import { rssiToBars } from "../utils/signal";
+import { countDb } from "../../deprecated/v2x_count_db";
+import { deviceDb } from "../../dbms/device_db";
+import Donut, { healthColorForPct } from "../common/Donut";
+import Led from "../common/Led";
+import SignalBars from "../common/SignalBars";
+import { rssiToBars } from "../../utils/signal";
 
 export default function MonitoringDeviceList({
   onStatusUpdate,        // 지도/상태 반영 (기존)

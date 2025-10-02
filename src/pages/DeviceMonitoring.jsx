@@ -1,30 +1,22 @@
 // src/pages/DeviceMonitoring.jsx
 import { useEffect, useRef, useState, useMemo } from "react";
 import { useMqttStore } from "../stores/MqttStore";
-import { saveV2XMessage, msgDb } from "../dbms/v2x_msg_db";
-import { updateMessageCount, countDb } from "../dbms/v2x_count_db";
-import { saveGnssData, gnssDb } from "../dbms/gnss_db";
+import { saveV2XMessage, msgDb } from "../deprecated/v2x_msg_db";
+import { updateMessageCount, countDb } from "../deprecated/v2x_count_db";
+import { saveGnssData, gnssDb } from "../deprecated/gnss_db";
 import { Card } from "../components/common/Card";
-import MonitoringDeviceList from "../components/MonitoringDeviceList";
-import StationMapPanel from "../components/StationMapPanel";
+import MonitoringDeviceList from "../components/monitor/MonitoringDeviceList";
+import StationMapPanel from "../components/monitor/StationMapPanel";
 import { BookDashed, BookCheck, ShieldOff, ShieldCheck, RefreshCcw, Layers as DummyIcon } from "lucide-react";
-import SystemResourcePanel from "../depretecated/SystemResourcePanel";
+import SystemResourcePanel from "../deprecated/SystemResourcePanel";
 import Led from "../components/common/Led";
 import SignalBars from "../components/common/SignalBars";
 import { rssiToBars } from "../utils/signal";
 
 // const snrBars = rssiToBars(selected?.rssi);
 
-export default function DeviceMonitoring({ embed = false, onVehiclePosition, onStatusUpdate }) {
-  const intervalRef = useRef(null);
-  const addMessageHandler = useMqttStore((s) => s.addMessageHandler);
-  const subscribeTopics  = useMqttStore((s) => s.subscribeTopics);
-  const unsubscribeTopics= useMqttStore((s) => s.unsubscribeTopics);
-  const publish          = useMqttStore((s) => s.publish);
-  const connected        = useMqttStore((s) => s.connected);
-
+export default function DeviceMonitoring({ onStatusUpdate }) {
   const [loading, setLoading] = useState(false);
-  const [vehiclePosition, setVehiclePosition] = useState(null);
   const [stationStatusMap, setStationStatusMap] = useState({});
   const [selected, setSelected] = useState(null); // <- 클릭된 항목
 
@@ -32,152 +24,6 @@ export default function DeviceMonitoring({ embed = false, onVehiclePosition, onS
     setStationStatusMap((prev) => ({ ...prev, [l2id]: status }));
     onStatusUpdate?.(l2id, status);
   };
-
-  const REQ_TOPIC   = "fac/V2X_MAINTENANCE_HUB_CLIENT_PA/V2X_MAINTENANCE_HUB_PA/cv2xPktMsg/req";
-  const RESP_SUFFIX = "/cv2xPktMsg/resp";
-  const REQUEST_ID  = "abc12345";
-  const hsRef = useRef({ inFlight:false, ack:false, timer:null, attempt:0 });
-
-  useEffect(() => {
-    const topics = [
-      "fac/V2X_MAINTENANCE_HUB_PA/V2X_MAINTENANCE_HUB_CLIENT_PA/cv2xPktMsg/resp",
-      "fac/V2X_MAINTENANCE_HUB_PA/V2X_MAINTENANCE_HUB_CLIENT_PA/cv2xPktMsg/jsonMsg",
-      "fac/GNSS_PA/ALL/gpsData/jsonMsg",
-    ];
-    subscribeTopics(topics, { qos: 0 });
-
-    const off = addMessageHandler(async (topic, message) => {
-      if (topic.endsWith("/cv2xPktMsg/jsonMsg")) {
-        try {
-          const payload = JSON.parse(message.toString());
-          let psid = null;
-          try {
-            psid = payload?.hdr16093?.transport?.bcMode?.destAddress?.extension?.content ?? null;
-          } catch {}
-          const l2idSrc = payload?.rxParams?.l2idSrc ?? null;
-
-          let rssi = null;
-          try {
-            const arr = payload?.rxParams?.rssiDbm8;
-            if (Array.isArray(arr) && arr.length > 0) {
-              const maxRaw = Math.max(...arr);
-              rssi = Math.round((maxRaw / 8) * 10) / 10;
-            }
-          } catch {}
-
-          if (psid != null && l2idSrc != null) {
-            await updateMessageCount({ psid: String(psid), l2idSrc: String(l2idSrc), rssi });
-          }
-        } catch (e) {
-          console.warn("cv2x JSON parse error:", e);
-        }
-        return;
-      }
-
-      if (topic === "fac/GNSS_PA/ALL/gpsData/jsonMsg") {
-        try {
-          const payload = JSON.parse(message.toString());
-          if (payload?.data) {
-            await saveGnssData(payload.data);
-            const { latitude, longitude } = payload.data;
-            if (latitude && longitude) {
-              const headingDeg = (payload.data.heading ?? 0) / 100;
-              const vp = { latitude, longitude, heading: headingDeg };
-              setVehiclePosition(vp);
-              onVehiclePosition?.(vp);
-            }
-          }
-        } catch (e) {
-          console.warn("GNSS JSON parse failed:", e);
-        }
-        return;
-      }
-
-      if (topic.endsWith(RESP_SUFFIX)) {
-        try {
-          const payload = JSON.parse(message.toString());
-          if (payload.status === "ok" && (!payload.requestId || payload.requestId === REQUEST_ID)) {
-            hsRef.current.ack = true;
-          }
-        } catch (e) {
-          console.warn("cv2x resp JSON parse error:", e);
-        }
-        return;
-      }
-    });
-
-    if (connected) startSubscribeHandshake(1, 3000);
-
-    return () => {
-      off();
-      unsubscribeTopics(topics);
-      cancelSubscribeHandshake();
-    };
-  }, [addMessageHandler, subscribeTopics, unsubscribeTopics, publish, connected]);
-
-  const sendSubscribeOnce = () => {
-    return publish(
-      REQ_TOPIC,
-      { action: "subscribe", options: { requestId: REQUEST_ID, filter: { l2id: "0", packetType: "ALL" } } },
-      { qos: 0 }
-    );
-  };
-
-  const startSubscribeHandshake = (maxRetries = 1, timeoutMs = 3000) => {
-    if (!connected) return;
-    const s = hsRef.current;
-    if (s.inFlight) return;
-    s.inFlight = true; s.ack = false; s.attempt = 0;
-    const finish = () => { if (s.timer) clearTimeout(s.timer); s.timer = null; s.inFlight = false; };
-    const attempt = () => {
-      if (s.ack) return finish();
-      if (s.attempt > maxRetries) return finish();
-      s.attempt += 1;
-      const ok = sendSubscribeOnce();
-      if (!ok) return finish();
-      s.timer = setTimeout(attempt, timeoutMs);
-    };
-    attempt();
-  };
-  const cancelSubscribeHandshake = () => { const s = hsRef.current; s.ack = false; s.inFlight = false; if (s.timer) { clearTimeout(s.timer); s.timer = null; } };
-
-  // ---- DEMO: 더미 데이터 ----
-  async function seedDemoData({ stations = 8 } = {}) {
-    setLoading(true);
-    try {
-      const center = { lat: 37.5665, lon: 126.9780 };
-      const veh = jitter(center, 0.02);
-      setVehiclePosition({ latitude: Math.round(veh.lat * 1e7), longitude: Math.round(veh.lon * 1e7), heading: Math.floor(Math.random() * 360) });
-
-      let first = null;
-      for (let i = 0; i < stations; i++) {
-        const serial = "K8QR2A2V10001";
-        const l2id = String(1000 + i);
-        const p = jitter(center, 0.08);
-        const ts = Date.now() - Math.floor(Math.random() * 30_000);
-        await saveGnssData({ serial, l2id, ts, latitude: Math.round(p.lat * 1e7), longitude: Math.round(p.lon * 1e7), speedKmh: Math.floor(Math.random() * 80), headingDeg: Math.floor(Math.random() * 360), fix: "3D-FIX" });
-        const psid = ["0x8002", "0x8003", "0x8004"][Math.floor(Math.random() * 3)];
-        const rssi = -50 - Math.floor(Math.random() * 30);
-        await updateMessageCount({ psid, l2idSrc: l2id, rssi });
-        await saveV2XMessage({ l2id, msgType: ["BSM","RSI","RSM"][Math.floor(Math.random()*3)], ts, payload: { id: `demo-${l2id}-${ts}` } });
-        const active = Math.random() > 0.1;
-        const hwHealth = 60 + Math.floor(Math.random() * 40); // 60~100
-        handleStatusUpdate(l2id, { gnss_data: { latitude: Math.round(p.lat * 1e7), longitude: Math.round(p.lon * 1e7) }, lastMsgTs: ts });
-        if (!first) first = { l2id, serial: `K8QR2A2V${String(l2id).padStart(5, "0")}`, rssi, active, hwHealth };
-      }
-      if (first) setSelected(first); // why: 초기 선택
-    } catch (e) {
-      console.error(e);
-      alert("더미 데이터 생성 실패");
-    } finally {
-      setLoading(false);
-    }
-  }
-  function jitter({ lat, lon }, radius = 0.05) {
-    const dLat = (Math.random() - 0.5) * radius;
-    const dLon = (Math.random() - 0.5) * radius;
-    return { lat: lat + dLat, lon: lon + dLon };
-  }
 
   return (
     <div className="grid w-full h-full">
@@ -205,7 +51,7 @@ export default function DeviceMonitoring({ embed = false, onVehiclePosition, onS
         <SummaryPanel selected={selected} />
 
         {/* 하단 리스트(클릭 → 위 패널 갱신) */}
-        <div className="mt-4 min-h-0" style={{ height: "calc(100% - 220px)" }}>
+        <div className="mt-4 min-h-0">
           <MonitoringDeviceList
             className="h-full"
             selectedId={selected?.l2id}
@@ -252,19 +98,19 @@ function SummaryPanel({ selected }) {
         
         <div className="flex justify-between col-span-12 space-x-2">
           {/* 맵 데이터 업데이트 */}
-          <div className="w-40 device-inspection-icon-btn justify-center bg-cyan-900/90">
+          <div className="w-40 flex-auto device-inspection-icon-btn justify-center bg-cyan-900/90">
             <span>MAP Data 업데이트</span>
           </div>
           {/* 장치 제어 */}
-          <div className="w-40 device-inspection-icon-btn justify-center bg-cyan-900/90">
+          <div className="w-40 flex-auto device-inspection-icon-btn justify-center bg-cyan-900/90">
             <span>장치제어(SNMP)</span>
           </div>
           {/* sw 업데이트 */}
-          <div className="w-40 device-inspection-icon-btn justify-center bg-cyan-900/90">
+          <div className="w-40 flex-auto device-inspection-icon-btn justify-center bg-cyan-900/90">
             <span>S/W 업데이트</span>
           </div>
           {/* 디버그 정보 */}
-          <div className="w-40 device-inspection-icon-btn items-center justify-center bg-cyan-900/90">
+          <div className="w-40 flex-auto device-inspection-icon-btn justify-center bg-cyan-900/90">
             <span>디버그 정보 저장</span>
           </div>
         </div>
