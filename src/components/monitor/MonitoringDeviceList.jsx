@@ -1,7 +1,5 @@
 // src/components/MonitoringDeviceList.jsx
 import { useEffect, useMemo, useRef, useState } from "react";
-import { countDb } from "../../deprecated/v2x_count_db";
-import { deviceDb } from "../../dbms/device_db";
 import Donut, { healthColorForPct } from "../common/Donut";
 import Led from "../common/Led";
 import SignalBars from "../common/SignalBars";
@@ -16,82 +14,82 @@ export default function MonitoringDeviceList({
   const [items, setItems] = useState([]);
   const timerRef = useRef(null);
 
-  useEffect(() => {
-    let mounted = true;
+  // useEffect(() => {
+  //   let mounted = true;
 
-    const tick = async () => {
-      try {
-        const [counts, deviceList] = await Promise.all([
-          countDb.counts.toArray(),
-          deviceDb.devices.toArray(),
-        ]);
-        const now = Date.now();
-        const devByL2 = new Map(deviceList.map(d => [String(d.l2id), d]));
+  //   const tick = async () => {
+  //     try {
+  //       const [counts, deviceList] = await Promise.all([
+  //         countDb.counts.toArray(),
+  //         deviceDb.devices.toArray(),
+  //       ]);
+  //       const now = Date.now();
+  //       const devByL2 = new Map(deviceList.map(d => [String(d.l2id), d]));
 
-        // l2idSrc → aggregate
-        const agg = new Map();
-        for (const entry of counts) {
-          const { l2idSrc, psid, count, lastUpdated, lastRssi } = entry || {};
-          if (l2idSrc == null) continue;
-          const key = String(l2idSrc);
-          if (!agg.has(key)) agg.set(key, { l2id: key, psidCount: {}, recentCount: 0, lastRssi: null, lastUpdated: 0 });
-          const g = agg.get(key);
+  //       // l2idSrc → aggregate
+  //       const agg = new Map();
+  //       for (const entry of counts) {
+  //         const { l2idSrc, psid, count, lastUpdated, lastRssi } = entry || {};
+  //         if (l2idSrc == null) continue;
+  //         const key = String(l2idSrc);
+  //         if (!agg.has(key)) agg.set(key, { l2id: key, psidCount: {}, recentCount: 0, lastRssi: null, lastUpdated: 0 });
+  //         const g = agg.get(key);
 
-          if (psid) g.psidCount[psid] = (g.psidCount[psid] || 0) + (count || 0);
-          if (typeof lastRssi === "number") g.lastRssi = lastRssi;
-          if (lastUpdated) g.lastUpdated = Math.max(g.lastUpdated, lastUpdated);
-          if (now - (lastUpdated || 0) <= 1000) g.recentCount += 1;
-        }
+  //         if (psid) g.psidCount[psid] = (g.psidCount[psid] || 0) + (count || 0);
+  //         if (typeof lastRssi === "number") g.lastRssi = lastRssi;
+  //         if (lastUpdated) g.lastUpdated = Math.max(g.lastUpdated, lastUpdated);
+  //         if (now - (lastUpdated || 0) <= 1000) g.recentCount += 1;
+  //       }
 
-        // map → array
-        const list = [...agg.values()].map(g => {
-          const dev = devByL2.get(g.l2id);
-          const serial = dev?.serial || dev?.model || `serial ${g.l2id}`;
-          const active = g.recentCount > 0 || (now - g.lastUpdated) < 5_000;
-          const rssi = typeof g.lastRssi === "number" ? g.lastRssi : null;
-          const health = estimateHealth({ rssi, recent: g.recentCount }); // 0~100
-          return {
-            id: g.l2id,
-            l2id: g.l2id,
-            serial,
-            ipv4: dev?.ipv4 ?? "-",
-            msgPerSec: g.recentCount,
-            psidCount: g.psidCount,
-            rssi,
-            bars: rssiToBars(rssi),
-            active,
-            health,
-            lastUpdated: g.lastUpdated,
-          };
-        });
+  //       // map → array
+  //       const list = [...agg.values()].map(g => {
+  //         const dev = devByL2.get(g.l2id);
+  //         const serial = dev?.serial || dev?.model || `serial ${g.l2id}`;
+  //         const active = g.recentCount > 0 || (now - g.lastUpdated) < 5_000;
+  //         const rssi = typeof g.lastRssi === "number" ? g.lastRssi : null;
+  //         const health = estimateHealth({ rssi, recent: g.recentCount }); // 0~100
+  //         return {
+  //           id: g.l2id,
+  //           l2id: g.l2id,
+  //           serial,
+  //           ipv4: dev?.ipv4 ?? "-",
+  //           msgPerSec: g.recentCount,
+  //           psidCount: g.psidCount,
+  //           rssi,
+  //           bars: rssiToBars(rssi),
+  //           active,
+  //           health,
+  //           lastUpdated: g.lastUpdated,
+  //         };
+  //       });
 
-        // 최신 활동 우선 정렬
-        list.sort((a, b) => (b.msgPerSec - a.msgPerSec) || (b.lastUpdated - a.lastUpdated));
+  //       // 최신 활동 우선 정렬
+  //       list.sort((a, b) => (b.msgPerSec - a.msgPerSec) || (b.lastUpdated - a.lastUpdated));
 
-        if (!mounted) return;
-        setItems(list);
+  //       if (!mounted) return;
+  //       setItems(list);
 
-        // 지도/상태판으로도 간단 전달(필요할 때)
-        if (onStatusUpdate) {
-          for (const it of list) {
-            onStatusUpdate(it.l2id, { meta: { ipv4: it.ipv4 }, lastMsgTs: it.lastUpdated });
-          }
-        }
-      } catch (e) {
-        if (process.env.NODE_ENV !== "production") {
-          console.error("❌ load counts/devices failed:", e);
-        }
-      }
-    };
+  //       // 지도/상태판으로도 간단 전달(필요할 때)
+  //       if (onStatusUpdate) {
+  //         for (const it of list) {
+  //           onStatusUpdate(it.l2id, { meta: { ipv4: it.ipv4 }, lastMsgTs: it.lastUpdated });
+  //         }
+  //       }
+  //     } catch (e) {
+  //       if (process.env.NODE_ENV !== "production") {
+  //         console.error("❌ load counts/devices failed:", e);
+  //       }
+  //     }
+  //   };
 
-    // 최초 즉시 + 1s 간격
-    tick();
-    timerRef.current = setInterval(tick, 1000);
-    return () => {
-      mounted = false;
-      if (timerRef.current) clearInterval(timerRef.current);
-    };
-  }, [onStatusUpdate]);
+  //   // 최초 즉시 + 1s 간격
+  //   tick();
+  //   timerRef.current = setInterval(tick, 1000);
+  //   return () => {
+  //     mounted = false;
+  //     if (timerRef.current) clearInterval(timerRef.current);
+  //   };
+  // }, [onStatusUpdate]);
 
   return (
     <div

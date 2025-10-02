@@ -1,10 +1,6 @@
 import { create } from "zustand";
 import mqtt from "mqtt";
 
-/**
- * [TODO]: jeseo, publish 타임아웃, 횟수 제어 로직 확인
- */
-
 export const useMqttStore = create((set, get) => {
   // 내부 리스너 & 구독목록 (스토어 외부로 노출하지 않음)
   const listeners = new Set();                              // Set<(topic, msg, packet) => void>
@@ -16,6 +12,7 @@ export const useMqttStore = create((set, get) => {
       return;
     }
     for (const [topic, opts] of subs.entries()) {
+      console.log(`SUB: ${topic}`);
       client.subscribe(topic, opts || {}, (err) => {
         if (err) console.error("subscribe error:", topic, err);
       });

@@ -1,14 +1,9 @@
 // src/pages/DeviceMonitoring.jsx
 import { useEffect, useRef, useState, useMemo } from "react";
-import { useMqttStore } from "../stores/MqttStore";
-import { saveV2XMessage, msgDb } from "../deprecated/v2x_msg_db";
-import { updateMessageCount, countDb } from "../deprecated/v2x_count_db";
-import { saveGnssData, gnssDb } from "../deprecated/gnss_db";
 import { Card } from "../components/common/Card";
 import MonitoringDeviceList from "../components/monitor/MonitoringDeviceList";
-import StationMapPanel from "../components/monitor/StationMapPanel";
 import { BookDashed, BookCheck, ShieldOff, ShieldCheck, RefreshCcw, Layers as DummyIcon } from "lucide-react";
-import SystemResourcePanel from "../deprecated/SystemResourcePanel";
+import SystemResourcePanel from "../components/monitor/SystemResourcePanel";
 import Led from "../components/common/Led";
 import SignalBars from "../components/common/SignalBars";
 import { rssiToBars } from "../utils/signal";

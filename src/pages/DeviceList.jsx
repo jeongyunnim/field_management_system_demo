@@ -3,12 +3,9 @@ import { useEffect, useState } from "react";
 import { deviceDb } from "../dbms/device_db";
 import { Card } from "../components/common/Card";
 import { ZoomIn, Trash2 as Trash, RefreshCcw as Sync, Pencil } from "lucide-react";
-import StationMapPanel from "../components/monitor/StationMapPanel";
 
 export default function DeviceList({ setActivePage, embed = false }) {
   const [loading, setLoading] = useState(false);
-  const [vehiclePosition, setVehiclePosition] = useState(null);
-  const [stationStatusMap, setStationStatusMap] = useState({});
   const [devices, setDevices] = useState([]);
   const [selected, setSelected] = useState(() => new Set());
 

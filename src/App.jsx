@@ -2,6 +2,7 @@
 import { useState, useMemo, useLayoutEffect, useEffect } from "react";
 // import mqtt from "mqtt"; // 스토어 내부에서 관리
 import { useMqttStore } from "./stores/MqttStore";
+import { initMqttBus, disposeMqttBus } from "./services/mqtt/bus";
 import Sidebar from "./components/sidebar/Sidebar.jsx";
 import Header from "./components/Header";
 
@@ -23,9 +24,10 @@ export default function App() {
   const disconnect = useMqttStore((s) => s.disconnect);
 
   useEffect(() => {
-    connect();
-    return () => disconnect();
-  }, [connect, disconnect]);
+    connect();                     // MqttStore 연결
+    const off = initMqttBus();     // 버스 초기화
+    return () => { off?.(); disconnect(); };
+  }, []);
 
   const renderCenter = () => {
     switch (activePage) {

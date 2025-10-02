@@ -1,53 +1,47 @@
 // pages/RegisterDevice.jsx
 import { useState } from "react";
 import { deviceDb } from "../dbms/device_db";
-import { getL2IDFromMac, checkDuplication } from "../utils/utils";
-
-
-// ++id, serial, model, latityde, longtitude, registeredAt
+// ✅ 안 쓰는 import 제거
+// import { getL2IDFromMac } from "../utils/utils";
+import { checkDuplication } from "../utils/utils";
 
 export default function RegisterDevice({ setActivePage }) {
   const [serial, setSerial] = useState("");
   const [model, setModel] = useState("");
-  const [ipv4, setIpv4] = useState("");
-  const [ipv6, setIpv6] = useState("");
 
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    if (!ipv4 && !ipv6) {
-      alert("IPv4 또는 IPv6 중 하나는 반드시 입력되어야 합니다.");
+    // ✅ 제출 시 정규화: 공백 제거(+ 필요하면 대문자 통일)
+    const serialNorm = serial.trim(); // .toUpperCase() 필요하면 추가
+    const modelNorm = model.trim();
+
+    if (!serialNorm) {
+      alert("serial 번호를 입력해주세요.");
       return;
     }
 
-    // const l2id = getL2IDFromMac(mac);
-    // if (l2id === null) {
-    //   alert("유효한 MAC 주소 형식이 아닙니다. (예: 00:11:22:33:44:55)");
-    //   return;
-    // }
-
-    if (!serial) {
-      alert("serial 번호를 입력해주세요.");
-      return ;
-    }
-
-    const { allow } = await checkDuplication({ serial });
+    // ✅ 중복 체크 (수정 모드가 아니므로 id는 전달하지 않음)
+    const { allow } = await checkDuplication({ serial: serialNorm });
     if (!allow) return;
 
     const registeredAt = new Date().toISOString();
 
     try {
       await deviceDb.devices.add({
-        serial: serial || null,
-        model: model || null,
-        latityde,
-        longtitude,
-        registeredAt
+        serial: serialNorm,
+        model: modelNorm || null,
+        registeredAt,
       });
 
       alert("디바이스 등록 완료");
       setActivePage("DeviceList");
     } catch (err) {
+      // ✅ 유니크 인덱스(&serial) 충돌 대응
+      if (err?.name === "ConstraintError") {
+        alert("❌ 이미 등록된 장비입니다. 동일한 Serial 이 존재합니다.");
+        return;
+      }
       console.error("등록 실패:", err);
       alert("디바이스 등록 실패");
     }
@@ -56,7 +50,7 @@ export default function RegisterDevice({ setActivePage }) {
   return (
     <div className="max-w-md mx-auto bg-white dark:bg-gray-700 p-6 rounded shadow">
       <h2 className="text-2xl font-bold mb-4 text-gray-800 dark:text-white">
-        디바이스 등록
+        모니터링 관리 대상 장치 등록
       </h2>
       <form onSubmit={handleSubmit} className="space-y-4">
         <div>
@@ -64,7 +58,8 @@ export default function RegisterDevice({ setActivePage }) {
           <input
             type="text"
             value={serial}
-            onChange={(e) => setSerial(e.target.value.trim())}
+            // ✅ 입력 중엔 trim 하지 마세요(사용자 입력 경험 저하 방지)
+            onChange={(e) => setSerial(e.target.value)}
             placeholder="예: K8QR2A2V10001"
             className="w-full px-3 py-2 border rounded"
             required
@@ -78,26 +73,6 @@ export default function RegisterDevice({ setActivePage }) {
             onChange={(e) => setModel(e.target.value)}
             className="w-full px-3 py-2 border rounded"
             placeholder="예: Smart-RSU"
-          />
-        </div>
-        <div>
-          <label className="block text-sm font-medium">IPv4</label>
-          <input
-            type="text"
-            value={ipv4}
-            onChange={(e) => setIpv4(e.target.value)}
-            className="w-full px-3 py-2 border rounded"
-            placeholder="예: 192.168.0.1"
-          />
-        </div>
-        <div>
-          <label className="block text-sm font-medium">IPv6</label>
-          <input
-            type="text"
-            value={ipv6}
-            onChange={(e) => setIpv6(e.target.value)}
-            className="w-full px-3 py-2 border rounded"
-            placeholder="예: fe80::1"
           />
         </div>
         <div className="flex justify-end space-x-2">
