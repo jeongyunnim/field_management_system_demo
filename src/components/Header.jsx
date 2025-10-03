@@ -5,6 +5,10 @@ import StopInspectionButton from "./buttons/StopInspectionButton";
 import { useMqttStore } from "../stores/MqttStore";
 import { request, startInspection, stopInspection } from "../services/mqtt/bus"
 
+const START_SYSTEM_CHECK_ID = 123456789;
+const STOP_SYSTEM_CHECK_ID = 123456790;
+
+
 export default function Header({ activePage }) {
   const [isInspecting, setIsInspecting] = useState(false);
   const connected = useMqttStore((s) => s.connected);
@@ -26,7 +30,7 @@ export default function Header({ activePage }) {
       const payload = {
         VER: "1.0",
         TS: new Date().toISOString(),
-        // TRANSACTION_ID는 bus.request 쪽에서 corrId로 자동 생성/주입하도록 구성했다면 생략 가능
+        TRANSACTION_ID: START_SYSTEM_CHECK_ID
       };
 
       // 1) 요청/응답 (버스가 resp를 전역에서 받아 resolve)
@@ -35,7 +39,7 @@ export default function Header({ activePage }) {
       // 2) 응답 코드 판정(프로토콜에 맞춰 수정)
       const code = resp?.data?.CODE ?? resp?.CODE ?? 200;
       const msg  = resp?.data?.MSG  ?? resp?.MSG  ?? "점검 시작 응답 수신";
-
+      console.log("[resp]", resp);
       if (Number(code) !== 200) {
         console.warn("시작 실패:", code, msg);
         alert(`점검 시작 실패${code ? ` (CODE ${code})` : ""}: ${msg}`);
@@ -57,6 +61,7 @@ export default function Header({ activePage }) {
       const payload = {
         VER: "1.0",
         TS: new Date().toISOString(),
+        TRANSACTION_ID: STOP_SYSTEM_CHECK_ID
       };
 
       const resp = await request("stopSystemCheck", payload, { timeoutMs: 10000 });
@@ -66,7 +71,7 @@ export default function Header({ activePage }) {
 
       if (Number(code) !== 200) {
         console.warn("중단 실패:", code, msg);
-        alert(`점검 중단 실패${code ? ` (CODE ${code})` : ""}: ${msg}`);
+        alert(`점검 중단 실패 ${code ? ` (CODE ${code})` : ""}: ${msg}`);
         return;
       }
 

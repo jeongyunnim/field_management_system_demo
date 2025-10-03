@@ -1,7 +1,7 @@
 // src/services/mqtt/bus.js
 // 요청/응답 매칭, 타임아웃, 점검 세션 라우팅, 패킷 처리
 import { useMqttStore } from "../../stores/MqttStore";
-import { useMapStore } from "../../stores/MapStore"; // 차량/스테이션 업데이트 예시(있다면)
+import { useVmStatusStore } from "../../stores/VmStatusStore";
 
  const TOPICS = {
    startReq:  "fac/V2X_MAINTENANCE_HUB_CLIENT_PA/V2X_MAINTENANCE_HUB_PA/startSystemCheck/req",
@@ -16,6 +16,7 @@ import { useMapStore } from "../../stores/MapStore"; // 차량/스테이션 업�
 let initialized = false;
 let offHandler = null;
 let isInspecting = false;
+let rseSubscribed = false;
 let respSubscribed = false;
 
 // 요청 대기(한 번만)
@@ -107,11 +108,11 @@ export function disposeMqttBus() {
     } catch {}
     respSubscribed = false;
   }
-  if (isInspecting) {
+  if (rseSubscribed) {
     try { 
       useMqttStore.getState().unsubscribeTopics([TOPICS.rseStatus]); 
     } catch {}
-    isInspecting = false;
+    rseSubscribed = false;
   }
   isInspecting = false;
   initialized = false;
@@ -159,32 +160,36 @@ function requestOnce(reqTopic, kind, payload, { timeoutMs, qos, retain }) {
 // ===== 점검 세션 & vmStatus 동적 구독 =====
 export function startInspection() {
   isInspecting = true;
-  if (!vmSubscribed) {
+  if (!rseSubscribed) {
     useMqttStore.getState().subscribeTopics([TOPICS.rseStatus], { qos: 1 });
-    vmSubscribed = true;
+    rseSubscribed = true;
   }
 }
 export function stopInspection() {
   isInspecting = false;
-  if (vmSubscribed) {
+  if (rseSubscribed) {
     useMqttStore.getState().unsubscribeTopics([TOPICS.rseStatus]);
-    vmSubscribed = false;
+    rseSubscribed = false;
   }
 }
 
 // ---------- vmStatus 처리 ----------
 function handleVmStatus(buf) {
   const msg = safeJsonOrText(buf);
-  // TODO: 여기서 전역 상태 업데이트/로그/알림 등을 수행
-  console.debug("[vmStatus]", msg);
+  try {
+    useVmStatusStore.getState().setFromVmStatus(msg);
+  } catch (e) {
+    console.warn("vmStatus parse failed:", e);
+  }
 }
 
 // ---------- rseStatus 처리 ----------
 function handleRseStatus(buf) {
   const msg = safeJsonOrText(buf);
   // TODO: 여기서 전역 상태 업데이트/로그/알림 등을 수행
-  console.debug("[rseStatus]", msg);
+  console.log("[rseStatus]", msg);
 }
+
 
 // ---------- 유틸 ----------
 function safeJsonOrText(buf) {

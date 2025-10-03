@@ -1,14 +1,13 @@
 // src/components/sidebar/SidebarStatusPanel.jsx
 import React from "react";
-import { Activity, Radio, Loader2, Navigation2 } from "lucide-react";
+import { Activity, Radio, Navigation2 } from "lucide-react";
 
 // 작은 뱃지
 const Badge = ({ ok, lte = false }) => (
   <span
     className={`inline-block h-3 w-10 rounded-full shadow 
-      ${ok ? "bg-[#32E36C] animate-pulse" : "bg-rose-500 "}
-      ${lte ? "mr-1" : ""}
-      `}
+      ${ok ? "bg-[#32E36C] animate-pulse" : "bg-slate-600/60"}
+      ${lte ? "mr-1" : ""}`}
   />
 );
 
@@ -21,20 +20,22 @@ const Row = ({ label, value, mono=false }) => (
 );
 
 // 스켈레톤(값 미도착 시)
-const Skel = () => <span className="inline-block h-4 w-16 animate-pulse rounded bg-slate-600/60" />;
+const Skel = () => <span className="inline-block h-3 w-10 rounded-full shadow bg-slate-600/60" />;
 
 export default function SidebarStatusPanel({
   isCollapsed = false,               // 사이드바 접힘 여부
+  fmsStatus = null,                  // fms 상태
   v2xReady = null,                   // true/false/null(로드중)
   freqMHz,                           // number | undefined
   bwMHz,                             // number | undefined
   txCount,                           // number
   rxCount,                           // number
-  gnss = {                           // { fix, lat, lon, headingDeg, speedKmh }
-    fix: undefined, lat: undefined, lon: undefined, headingDeg: undefined, speedKmh: undefined
+  gnss = {                           // { fix, lat, lon }
+    mode: undefined, lat: undefined, lon: undefined
   },
   className = "",
 }) {
+
   return (
     <div
       className={`
@@ -49,25 +50,25 @@ export default function SidebarStatusPanel({
         "
       >
         {/* 헤더 */}
-        <div className="flex items-center justify-between m-3 space-x-2">
+        <div className="flex items-center justify-between mt-1 mb-2 mx-2">
           <div className="flex items-center gap-2 text-slate-200">
             <Activity size={20} className="opacity-80" />
             {!isCollapsed && <span className="text-sm font-semibold">V2X-FMS</span>}
           </div>
           {
-            v2xReady == null ? <Loader2 size={5} className="animate-spin opacity-70" /> : <Badge ok={v2xReady} />
+            fmsStatus == null ? <Skel /> : <Badge ok={fmsStatus} />
           }
         </div>
 
         {isCollapsed ? (
-            <span className={`h-4 w-6 rounded-full ${v2xReady ? "bg-emerald-400" : "bg-rose-400"}`} />
+            <span className={`h-4 w-6 rounded-full ${fmsStatus ? "bg-emerald-400" : "bg-slate-600/60"}`} />
         ) : (
           <>
             <div className="grid gap-2">
               <div className="rounded-lg border border-slate-600/60 bg-slate-700/60 px-2 py-1">
                 <div className="flex items-center justify-between side-status-title font-semibold">
                   <span>LTE-V2X</span>
-                  {v2xReady == null ? <Skel /> : <Badge ok={!!v2xReady} lte={true} />}
+                  <Badge ok={!!v2xReady} lte={true} />
                 </div>
               </div>
 
@@ -95,7 +96,7 @@ export default function SidebarStatusPanel({
                   <span className="side-status-title font-semibold ">GNSS</span>
                 </div>
                 <div className="grid grid-cols-1 gap-x-3 gap-y-1 side-status-title">
-                  <Row label="mode"    value={gnss.fix ?? <Skel />} />
+                  <Row label="mode"    value={gnss.mode ?? <Skel />} />
                   <Row label="위도"    value={gnss.lat != null ? gnss.lat : <Skel />} mono />
                   <Row label="경도"    value={gnss.lon != null ? gnss.lon : <Skel />} mono />
                 </div>

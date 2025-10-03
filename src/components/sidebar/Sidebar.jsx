@@ -1,6 +1,6 @@
 // src/layouts/Sidebar.jsx (중요 부분만)
 import { useState } from "react";
-import SidebarStatusPanel from "./SidebarStatusPanel";
+import SidebarStatusPanel from "./SidebarStatusPanelContainer";
 import { LayoutDashboard, Monitor, Server, Wifi, Settings, ChevronLeft, ChevronRight } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import SidebarItem from "./SidebarItem";
@@ -77,7 +77,8 @@ export default function Sidebar({ activePage, setActivePage, isCollapsed, setIsC
       <div className="pb-2 bg-gradient-to-t from-slate-700 via-slate-700/95 to-transparent">
         <SidebarStatusPanel
           isCollapsed={isCollapsed}
-          v2xReady={true}
+          v2xReady={false}
+          fmsStatus={false}
           freqMHz={5850}
           bwMHz={10}
           txCount={123456}

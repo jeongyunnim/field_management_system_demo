@@ -1,5 +1,5 @@
 // src/App.jsx
-import { useState, useMemo, useLayoutEffect, useEffect } from "react";
+import { useState, useEffect } from "react";
 // import mqtt from "mqtt"; // 스토어 내부에서 관리
 import { useMqttStore } from "./stores/MqttStore";
 import { initMqttBus, disposeMqttBus } from "./services/mqtt/bus";
@@ -16,8 +16,6 @@ import StationMapPanel from "./components/monitor/StationMapPanel.jsx";
 export default function App() {
   const [activePage, setActivePage] = useState("Home");
   const [isCollapsed, setIsCollapsed] = useState(false);
-  const [vehiclePosition, setVehiclePosition] = useState(null);
-  const [stationStatusMap, setStationStatusMap] = useState({});
   
   /** MQTT 초기화 */
   const connect = useMqttStore((s) => s.connect);
@@ -38,15 +36,7 @@ export default function App() {
       case "RegisterDevice":
         return <RegisterDevice setActivePage={setActivePage} />;
       case "DeviceMonitoring":
-        return (
-          <DeviceMonitoring
-            setActivePage={setActivePage}
-            onVehiclePosition={setVehiclePosition}
-            onStatusUpdate={(l2id, status) =>
-              setStationStatusMap((prev) => ({ ...prev, [l2id]: status }))
-            }
-          />
-        );
+        return <DeviceMonitoring setActivePage={setActivePage} />;
       case "V2XTest":
         return <V2XTest />;
       case "Settings":
@@ -66,25 +56,18 @@ export default function App() {
           isCollapsed={isCollapsed}
           setIsCollapsed={setIsCollapsed}
         />
-
-      {/* Main content area */}
         <div className="w-4/5 flex flex-1 min-h-0 flex-col">
+          {/* Header */}
           <Header
             activePage={activePage}
           />
 
-          {/* ✅ Two-pane layout only for DeviceList/DeviceMonitoring */}
+          {/* main view */}
           <main className="w-full flex-1 min-h-0 p-7">
             {activePage === "DeviceList" || activePage === "DeviceMonitoring" ? (
               <div className="grid grid-cols-[2fr_1fr] w-full h-full gap-3">
-                <div className="min-h-0">
-                  {renderCenter()}
-                </div>
-                <StationMapPanel
-                  vehiclePosition={vehiclePosition}
-                  stationStatusMap={stationStatusMap}
-                  className="h-full"
-                />
+                {renderCenter()}
+                <StationMapPanel />
               </div>
             ) : (
               renderCenter()
