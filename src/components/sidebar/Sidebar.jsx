@@ -78,7 +78,6 @@ export default function Sidebar({ activePage, setActivePage, isCollapsed, setIsC
         <SidebarStatusPanel
           isCollapsed={isCollapsed}
           v2xReady={false}
-          fmsStatus={false}
           freqMHz={5850}
           bwMHz={10}
           txCount={123456}

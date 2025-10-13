@@ -26,7 +26,6 @@ export const useVmStatusStore = create((set, get) => ({
 function normalizeVmStatus(msg) {
   if (!msg || typeof msg !== "object") {
     return {
-      fmsStatus: null,
       v2xReady: null,
       freqMHz: undefined,
       bwMHz: undefined,
@@ -46,10 +45,9 @@ function normalizeVmStatus(msg) {
   const lat = toFloatLat(g.latitude);
   const lon = toFloatLon(g.longitude);
   const mode = toFixLabel(g.mode, g.status);
-	const fmsStatus = g.status;
 
   return {
-    fmsStatus, v2xReady, freqMHz, bwMHz, txCount, rxCount,
+    v2xReady, freqMHz, bwMHz, txCount, rxCount,
     gnss: { mode, lat, lon },
   };
 }

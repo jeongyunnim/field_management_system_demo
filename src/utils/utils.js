@@ -1,15 +1,5 @@
 // src/utils/utils.js
-import { deviceDb } from "../dbms/device_db";
-
-// export function getL2IDFromMac(macAddress) {
-//   const parts = macAddress.split(":");
-//   if (parts.length !== 6) return null;
-
-//   const macBytes = parts.map((p) => parseInt(p, 16));
-//   if (macBytes.some((b) => isNaN(b))) return null;
-
-//   return (macBytes[3] << 16) | (macBytes[4] << 8) | macBytes[5];
-// }
+import { deviceDb } from "../dbms/deviceDb";
 
 export async function checkDuplication({ serial, id = null }) {
   if (!serial) return { allow: true };

@@ -22,7 +22,7 @@ export const useMqttStore = create((set, get) => {
   const api = {
     connected: false,
 
-    connect(url = "ws://192.168.69.152:9001", options = { reconnectPeriod: 5000 }) {
+    connect(url = "ws://192.168.123.129:9001", options = { reconnectPeriod: 5000 }) {
       if (client) return; // 중복 연결 방지
       client = mqtt.connect(url, options);
 
@@ -90,6 +90,7 @@ export const useMqttStore = create((set, get) => {
     subscribeTopics(topics, defaultOpts = { qos: 0 }) {
       const list = Array.isArray(topics) ? topics : [];
       for (const t of list) {
+        console.log("sub ->", t);
         if (typeof t === "string") {
           subs.set(t, defaultOpts);
         } else if (t && typeof t.topic === "string") {

@@ -8,7 +8,6 @@ export default function SidebarStatusPanelContainer({ isCollapsed = false, class
   return (
     <SidebarStatusPanel
       isCollapsed={isCollapsed}
-      fmsStatus={!parsed.fmsStatus}
       v2xReady={parsed.v2xReady}
       freqMHz={parsed.freqMHz}
       bwMHz={parsed.bwMHz}

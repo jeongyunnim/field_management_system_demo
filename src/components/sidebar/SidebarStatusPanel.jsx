@@ -24,7 +24,6 @@ const Skel = () => <span className="inline-block h-3 w-10 rounded-full shadow bg
 
 export default function SidebarStatusPanel({
   isCollapsed = false,               // 사이드바 접힘 여부
-  fmsStatus = null,                  // fms 상태
   v2xReady = null,                   // true/false/null(로드중)
   freqMHz,                           // number | undefined
   bwMHz,                             // number | undefined
@@ -56,12 +55,12 @@ export default function SidebarStatusPanel({
             {!isCollapsed && <span className="text-sm font-semibold">V2X-FMS</span>}
           </div>
           {
-            fmsStatus == null ? <Skel /> : <Badge ok={fmsStatus} />
+            !isCollapsed && !!v2xReady ? "" : <Badge ok={v2xReady} />
           }
         </div>
 
         {isCollapsed ? (
-            <span className={`h-4 w-6 rounded-full ${fmsStatus ? "bg-emerald-400" : "bg-slate-600/60"}`} />
+            <span className={`h-4 w-6 rounded-full ${v2xReady ? "bg-emerald-400" : "bg-slate-600/60"}`} />
         ) : (
           <>
             <div className="grid gap-2">

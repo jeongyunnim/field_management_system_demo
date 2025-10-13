@@ -1,16 +1,20 @@
 // src/services/mqtt/bus.js
 // 요청/응답 매칭, 타임아웃, 점검 세션 라우팅, 패킷 처리
+import { isDeviceRegistered } from "../../dbms/deviceDb";
+import { useMetricsStore } from "../../stores/MetricsStore";
 import { useMqttStore } from "../../stores/MqttStore";
 import { useVmStatusStore } from "../../stores/VmStatusStore";
+import { rseToItem } from "../../utils/rseTransform";
 
- const TOPICS = {
-   startReq:  "fac/V2X_MAINTENANCE_HUB_CLIENT_PA/V2X_MAINTENANCE_HUB_PA/startSystemCheck/req",
-   startResp: "fac/V2X_MAINTENANCE_HUB_PA/V2X_MAINTENANCE_HUB_CLIENT_PA/startSystemCheck/resp",
-   stopReq:   "fac/V2X_MAINTENANCE_HUB_CLIENT_PA/V2X_MAINTENANCE_HUB_PA/stopSystemCheck/req",
-   stopResp:  "fac/V2X_MAINTENANCE_HUB_PA/V2X_MAINTENANCE_HUB_CLIENT_PA/stopSystemCheck/resp",
-   vmStatus:  "fac/V2X_MAINTENANCE_HUB_PA/V2X_MAINTENANCE_HUB_CLIENT_PA/vmStatus/jsonMsg",
-   rseStatus: "fac/SYS_MON_PA/V2X_MAINTENANCE_HUB_PA/systemSnapshot/jsonMsg",
- };
+
+const TOPICS = {
+  startReq:  "fac/V2X_MAINTENANCE_HUB_CLIENT_PA/V2X_MAINTENANCE_HUB_PA/startSystemCheck/req",
+  startResp: "fac/V2X_MAINTENANCE_HUB_PA/V2X_MAINTENANCE_HUB_CLIENT_PA/startSystemCheck/resp",
+  stopReq:   "fac/V2X_MAINTENANCE_HUB_CLIENT_PA/V2X_MAINTENANCE_HUB_PA/stopSystemCheck/req",
+  stopResp:  "fac/V2X_MAINTENANCE_HUB_PA/V2X_MAINTENANCE_HUB_CLIENT_PA/stopSystemCheck/resp",
+  vmStatus:  "fac/V2X_MAINTENANCE_HUB_PA/V2X_MAINTENANCE_HUB_CLIENT_PA/vmStatus/jsonMsg",
+  rseStatus: "fac/SYS_MON_PA/V2X_MAINTENANCE_HUB_PA/systemSnapshot/jsonMsg",
+};
 
 // 내부 상태
 let initialized = false;
@@ -157,7 +161,7 @@ function requestOnce(reqTopic, kind, payload, { timeoutMs, qos, retain }) {
   return promise;
 }
 
-// ===== 점검 세션 & vmStatus 동적 구독 =====
+// ===== 점검 세션 =====
 export function startInspection() {
   isInspecting = true;
   if (!rseSubscribed) {
@@ -184,10 +188,27 @@ function handleVmStatus(buf) {
 }
 
 // ---------- rseStatus 처리 ----------
-function handleRseStatus(buf) {
-  const msg = safeJsonOrText(buf);
-  // TODO: 여기서 전역 상태 업데이트/로그/알림 등을 수행
-  console.log("[rseStatus]", msg);
+export async function handleRseStatus(buf) {
+  const msg = safeJsonOrText(buf);      // 기존 로직 유지 (문자열 or JS 객체 반환 가정)
+  const data = typeof msg === "string" ? JSON.parse(msg) : msg;
+
+  const serial = data?.serial_number;
+
+  if (!(await isDeviceRegistered(serial))) 
+  {
+    console.debug("[rseStatus] ignored (unregistered):", serial);
+    return ;
+  }
+
+  const item = rseToItem(data); // { id: serial, ... }
+
+  if (typeof window !== "undefined" && typeof window.__pushRseItem === "function") {
+    window.__pushRseItem(item);  // MonitoringDeviceList로 업서트
+  }
+
+  useMetricsStore.getState().pushFromItem(item);
+  console.log("[rseStatus] upsert (registered):", item.id);
+
 }
 
 
