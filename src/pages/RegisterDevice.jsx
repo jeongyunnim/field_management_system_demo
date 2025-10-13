@@ -1,6 +1,6 @@
 // pages/RegisterDevice.jsx
 import { useState } from "react";
-import { deviceDb } from "../dbms/device_db";
+import { deviceDb } from "../dbms/deviceDb";
 // ✅ 안 쓰는 import 제거
 // import { getL2IDFromMac } from "../utils/utils";
 import { checkDuplication } from "../utils/utils";

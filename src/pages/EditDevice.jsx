@@ -1,7 +1,7 @@
 // pages/EditDevice.jsx
 import { useEffect, useState } from "react";
-import { deviceDb } from "../dbms/device_db";
-import { getL2IDFromMac, checkDuplication } from "../utils/utils";
+import { deviceDb } from "../dbms/deviceDb";
+import { checkDuplication } from "../utils/utils";
 
 export default function EditDevice({ setActivePage }) {
   const [device, setDevice] = useState(null);
@@ -35,20 +35,13 @@ export default function EditDevice({ setActivePage }) {
       return;
     }
 
-    const newL2ID = getL2IDFromMac(mac);
-    if (newL2ID === null) {
-      alert("MAC 주소 형식이 잘못되었습니다. 예: 00:11:22:33:44:55");
-      return;
-    }
-
-    const { allow } = await checkDuplication({ id, mac, l2id: newL2ID });
+    const { allow } = await checkDuplication({ id, mac });
     if (!allow) return;
 
     await deviceDb.devices.update(id, {
       ipv4,
       ipv6,
       mac,
-      l2id: newL2ID
     });
 
     alert("디바이스 정보가 수정되었습니다.");

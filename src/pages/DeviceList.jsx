@@ -1,6 +1,6 @@
 // src/pages/DeviceList.jsx
 import { useEffect, useState } from "react";
-import { deviceDb } from "../dbms/device_db";
+import { deviceDb } from "../dbms/deviceDb";
 import { Card } from "../components/common/Card";
 import { ZoomIn, Trash2 as Trash, RefreshCcw as Sync, Pencil } from "lucide-react";
 
@@ -63,13 +63,6 @@ export default function DeviceList({ setActivePage, embed = false }) {
 
   const allChecked = devices.length > 0 && selected.size === devices.length;
   const someChecked = selected.size > 0 && !allChecked;
-
-  const fmtCoord = (v) =>
-    typeof v === "number"
-      ? v.toFixed(6)
-      : typeof v === "string" && !Number.isNaN(Number(v))
-      ? Number(v).toFixed(6)
-      : v ?? "-";
 
   return (
     <Card className="h-full">
