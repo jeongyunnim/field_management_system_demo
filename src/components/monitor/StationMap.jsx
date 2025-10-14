@@ -1,98 +1,88 @@
 // src/components/StationMap.jsx
-import { useMapEvents, MapContainer, Marker, Popup, useMap } from "react-leaflet";
-import { useEffect, useState, useRef, memo } from "react";
+import { MapContainer, Marker, Tooltip, Popup, useMap, useMapEvents } from "react-leaflet";
+import { useEffect, useState, useRef, useMemo, memo } from "react";
 import L from "leaflet";
 import markerIcon2x from "leaflet/dist/images/marker-icon-2x.png";
 import markerIcon from "leaflet/dist/images/marker-icon.png";
 import markerShadow from "leaflet/dist/images/marker-shadow.png";
 import "leaflet-rotatedmarker";
 import * as protomapsL from "protomaps-leaflet";
+import { useRseStore } from "../../stores/RseStore";
+import { useMetricsStore } from "../../stores/MetricsStore";
 
-// 기본 아이콘 경로 재지정
+// ----- Leaflet 기본 아이콘 경로 -----
 delete L.Icon.Default.prototype._getIconUrl;
-L.Icon.Default.mergeOptions({
-  iconRetinaUrl: markerIcon2x,
-  iconUrl: markerIcon,
-  shadowUrl: markerShadow
+L.Icon.Default.mergeOptions({ iconRetinaUrl: markerIcon2x, iconUrl: markerIcon, shadowUrl: markerShadow });
+
+// ----- 차량 아이콘 (고정) -----
+const carIcon = new L.Icon({ 
+  iconUrl: "/assets/Vehicle.png", 
+  iconSize: [32, 32], 
+  iconAnchor: [16, 32], 
+  popupAnchor: [0, -16] 
 });
 
-// 차량 아이콘
-const carIcon = new L.Icon({
-  iconUrl: "/assets/Vehicle.png",
-  iconSize: [32, 32],
-  iconAnchor: [16, 16],
-  popupAnchor: [0, -16],
-});
+// --- DivIcon 캐시 (warn/selected 조합 4종만) ---
+const __rseDivIconCache = new Map(); // key: 'wS'|'wN'|'nS'|'nN'
+function makeDivIcon(warn, selected) {
+  const key = (warn ? "w" : "n") + (selected ? "S" : "N");
+  if (__rseDivIconCache.has(key)) return __rseDivIconCache.get(key);
+  const src = warn ? "/assets/RSE_warn.png" : "/assets/RSE.png";
+  const icon = new L.DivIcon({
+    className: "rse-wrapper",
+    iconSize: [32, 32],
+    iconAnchor: [16, 32],
+    html: `
+      <img class="rse-img ${selected ? "selected" : ""} ${warn ? "warn" : "ok"}"
+           src="${src}" alt="RSE" width="32" height="32" />
+    `,
+  });
+  __rseDivIconCache.set(key, icon);
+  return icon;
+}
 
-// 스테이션 아이콘
-const stationIcon = new L.Icon({
-  iconUrl: "/assets/RSE.png",
-  iconSize: [32, 32],
-  iconAnchor: [16, 32],
-  popupAnchor: [0, -32],
-});
 
-// 1e7 스케일/소수 둘 다 지원 + 유효성 체크
+// ----- 좌표 정규화 -----
 function normalizeLatLon(rawLat, rawLon) {
-  const isFiniteNum = (v) => typeof v === "number" && Number.isFinite(v);
-  let lat = isFiniteNum(rawLat) ? rawLat : null;
-  let lon = isFiniteNum(rawLon) ? rawLon : null;
-
-  // 정규화(스케일링)
-  if (lat != null && Math.abs(lat) > 90) lat = lat / 1e7;
-  if (lon != null && Math.abs(lon) > 180) lon = lon / 1e7;
-
-  // 범위검사 실패 시 무효 처리
+  const n = (v) => typeof v === "number" && Number.isFinite(v) ? v : null;
+  let lat = n(rawLat), lon = n(rawLon);
+  if (lat != null && Math.abs(lat) > 90) lat /= 1e7;
+  if (lon != null && Math.abs(lon) > 180) lon /= 1e7;
   if (!(typeof lat === "number" && Math.abs(lat) <= 90)) lat = null;
   if (!(typeof lon === "number" && Math.abs(lon) <= 180)) lon = null;
-
-  // 좌표가 없으면 기본 좌표(서울 시청)로 대체하여 지도를 항상 표시
   const isFallback = !(lat != null && lon != null);
-  if (isFallback) {
-    lat = 37.5665;
-    lon = 126.9780;
-  }
-
+  if (isFallback) { lat = 37.5665; lon = 126.9780; }
   return { lat, lon, isFallback };
 }
 
-// PMTiles(벡터) 레이어
+// ----- PMTiles 벡터 레이어 -----
 function PMTilesVectorLayer({ pmtilesPath = "/maps/seoulToGunsan.pmtiles" }) {
   const map = useMap();
   useEffect(() => {
     if (!map) return;
-    // SSR 안전
     const origin = typeof window !== "undefined" ? window.location.origin : "";
     const absUrl = `${origin}${pmtilesPath}`;
     const layer = protomapsL.leafletLayer({ url: absUrl, flavor: "light", lang: "ko" });
     layer.addTo(map);
-    return () => {
-      try { map.removeLayer(layer); } catch {}
-    };
+    return () => { try { map.removeLayer(layer); } catch {} };
   }, [map, pmtilesPath]);
   return null;
 }
 
-// 지도 따라가기
+// ----- 지도 자동 추적 -----
 function RecenterMap({ lat, lon, autoFollow }) {
   const map = useMap();
   const prevRef = useRef({ lat: null, lon: null });
-
   useEffect(() => {
-    if (lat == null || lon == null) return;
-    if (!autoFollow) return;
+    if (lat == null || lon == null || !autoFollow) return;
     if (prevRef.current.lat === lat && prevRef.current.lon === lon) return;
     prevRef.current = { lat, lon };
-    try {
-      map.easeTo({ center: [lat, lon], duration: 350 });
-    } catch {
-      map.setView([lat, lon]);
-    }
+    try { map.easeTo({ center: [lat, lon], duration: 350 }); } catch { map.setView([lat, lon]); }
   }, [lat, lon, autoFollow, map]);
-
   return null;
 }
 
+// ----- 사용자 상호작용 시 자동추적 해제 -----
 function MapInteractions({ onUserInteract }) {
   useMapEvents({
     dragstart: (e) => { if (e?.originalEvent) onUserInteract?.(); },
@@ -102,122 +92,85 @@ function MapInteractions({ onUserInteract }) {
   return null;
 }
 
+// ----- 간단 추적 토글 컨트롤 -----
 function MapControl({ autoFollow, setAutoFollow }) {
   const map = useMap();
   const btnRef = useRef(null);
   const controlRef = useRef(null);
-
   useEffect(() => {
     if (!map) return;
-
-    const makeButton = (onClick, initial = false) => {
-      const container = L.DomUtil.create("div", "");
-      const btn = document.createElement("button");
-      btn.type = "button";
-      btn.title = "지도를 드래그/확대하면 자동으로 꺼집니다";
-      btn.setAttribute("aria-pressed", String(!!initial));
-      btn.setAttribute("tabindex", "0");
-      btn.innerText = initial ? "추적: ON" : "추적: OFF";
-      btn.className = "rounded-md text-sm font-medium shadow-sm transition-colors";
-      btn.className += initial ? " bg-indigo-600 text-white" : " bg-gray-600 text-white";
-      btn.style.minWidth = "96px";
-      btn.style.height = "40px";
-      btn.style.display = "inline-flex";
-      btn.style.alignItems = "center";
-      btn.style.justifyContent = "center";
-      btn.style.cursor = "pointer";
-      btn.style.userSelect = "none";
-      btn.style.border = "0";
-
-      btn.addEventListener("keydown", (e) => {
-        if (e.key === "Enter" || e.key === " ") { e.preventDefault(); btn.click(); }
-      });
-      L.DomEvent.disableClickPropagation(btn);
-      L.DomEvent.disableScrollPropagation(btn);
-      container.appendChild(btn);
-      L.DomEvent.on(btn, "click", onClick);
-      return { container, btn };
-    };
-
-    const onClick = (e) => {
-      L.DomEvent.stopPropagation(e);
-      L.DomEvent.preventDefault(e);
-      setAutoFollow((v) => !v);
-    };
-
-    try {
-      const { btn } = makeButton(onClick, autoFollow);
-      const control = L.control({ position: "topright" });
-      control.onAdd = () => {
-        const wrapper = L.DomUtil.create("div", "leaflet-bar");
-        wrapper.style.display = "flex";
-        wrapper.style.alignItems = "center";
-        wrapper.style.justifyContent = "center";
-        wrapper.style.padding = "2px";
-        wrapper.style.margin = "4px";
-        wrapper.appendChild(btn);
-        L.DomEvent.disableClickPropagation(wrapper);
-        return wrapper;
-      };
-      control.addTo(map);
-      controlRef.current = control;
-      btnRef.current = btn;
-    } catch (err) {
-      console.warn("MapControl: leaflet control add failed:", err);
-    }
-
-    return () => {
-      try { controlRef.current?.remove?.(); } catch {}
-      if (btnRef.current) {
-        try { L.DomEvent.off(btnRef.current, "click"); } catch {}
-        btnRef.current = null;
-      }
-      controlRef.current = null;
-    };
-  }, [map]); // mount once
-
-  useEffect(() => {
-    const btn = btnRef.current;
-    if (!btn) return;
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.title = "지도를 드래그/확대하면 자동으로 꺼집니다";
     btn.innerText = autoFollow ? "추적: 켜짐" : "추적: 꺼짐";
-    btn.style.background = autoFollow ? "#2563eb" : "#6b7280";
-  }, [autoFollow]);
-
+    btn.className = "leaflet-bar"; // 심플
+    btn.style.minWidth = "88px";
+    btn.onclick = (e) => { e.preventDefault(); e.stopPropagation(); setAutoFollow((v) => !v); };
+    const ctl = L.control({ position: "topright" });
+    ctl.onAdd = () => btn;
+    ctl.addTo(map);
+    btnRef.current = btn;
+    controlRef.current = ctl;
+    return () => { try { controlRef.current?.remove?.(); } catch {}; btnRef.current = null; controlRef.current = null; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [map]); // mount once
+  useEffect(() => { if (btnRef.current) btnRef.current.innerText = autoFollow ? "추적: 켜짐" : "추적: 꺼짐"; }, [autoFollow]);
   return null;
 }
 
-function StationMapImpl({
-  latitude,
-  longitude,
-  heading = 0,
-}) {
-  // 항상 맵은 렌더 → 좌표가 없으면 기본 좌표 사용
+// ----- RSE 마커들 -----
+function RseMarkersInline() {
+  // 1) 개별 셀렉터로 구독 (객체 생성 금지)
+  const byId = useRseStore((s) => s.byId);
+  const selectedId = useMetricsStore((s) => s.selectedId);
+  const warningById = useMetricsStore((s) => s.warningById);
+
+  // 2) 파생 목록 메모 
+  const entries = useMemo(() => {
+    const all = Object.values(byId);
+    return all.filter((v) => Number.isFinite(v?.gnss?.lat) && Number.isFinite(v?.gnss?.lon));
+  }, [byId]);
+
+  if (entries.length === 0) return null;
+
+  return (
+    <>
+      {entries.map((v) => {
+        const warn = !!warningById?.[v.id];
+        const selected = !!selectedId && v.id === selectedId;
+        const icon = makeDivIcon(warn, selected);
+        return (
+          <Marker key={v.id} position={[v.gnss.lat, v.gnss.lon]} icon={icon} zIndexOffset={selected ? 1000 : 0}>
+            <Popup>
+              <div style={{ fontSize: 12, lineHeight: 1.2 }}>
+                <div><strong>{v.serial ?? v.id}</strong></div>
+                <div>({v.gnss.lat?.toFixed?.(6)}, {v.gnss.lon?.toFixed?.(6)})</div>
+                {warn && <div style={{ color: "#dc2626" }}>⚠ Health 비정상</div>}
+                {selected && <div style={{ color: "#2563eb" }}>✓ 선택됨</div>}
+              </div>
+            </Popup>
+          </Marker>
+        );
+      })}
+    </>
+  );
+}
+
+// ----- 메인 컴포넌트 -----
+function StationMapImpl({ latitude, longitude, heading = 0 }) {
   const norm = normalizeLatLon(latitude, longitude);
   const center = { lat: norm.lat, lon: norm.lon };
   const isFallback = norm.isFallback;
-
   const [autoFollow, setAutoFollow] = useState(true);
 
   return (
-    <MapContainer
-      center={[center.lat, center.lon]}
-      zoom={15}
-      scrollWheelZoom={true}
-      style={{ width: "100%", height: "100%", borderRadius: "0.5rem"}}
-    >
+    <MapContainer center={[center.lat, center.lon]} zoom={15} scrollWheelZoom style={{ width: "100%", height: "100%", borderRadius: 8 }}>
       <PMTilesVectorLayer pmtilesPath="/maps/seoulToGunsan.pmtiles" />
+      <RseMarkersInline />
 
-      {/* 차량 마커: 값이 없어도 기본 좌표에 임시로 표시 */}
-      <Marker
-        position={[center.lat, center.lon]}
-        icon={carIcon}
-        rotationAngle={Number.isFinite(heading) ? heading : 0}
-        rotationOrigin="center"
-      >
-        <Popup>
-          차량 위치<br />
-          {center.lat.toFixed(6)}, {center.lon.toFixed(6)}
-        </Popup>
+      {/* 차량 마커 */}
+      <Marker position={[center.lat, center.lon]} icon={carIcon} rotationAngle={Number.isFinite(heading) ? heading : 0} rotationOrigin="center">
+        <Popup>차량 위치<br />{center.lat.toFixed(6)}, {center.lon.toFixed(6)}</Popup>
       </Marker>
 
       <RecenterMap lat={center.lat} lon={center.lon} autoFollow={autoFollow && !isFallback} />

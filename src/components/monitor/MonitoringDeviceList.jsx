@@ -86,7 +86,8 @@ export default function MonitoringDeviceList({
                   <Donut
                     value={it.health.pct}
                     color={healthColorForPct(it.health.pct)}
-                    size={24}
+                    showValue={false} 
+                    size={30}
                     stroke={6}
                     variant="conic"
                   />

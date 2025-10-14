@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<network-security-config>
+  <base-config cleartextTrafficPermitted="true" />
+  <!-- 운영 전에는 WSS로 바꾸고 이 설정 지우는 것 권장 -->
+</network-security-config>

@@ -5,6 +5,7 @@ import { useMetricsStore } from "../../stores/MetricsStore";
 import { useMqttStore } from "../../stores/MqttStore";
 import { useVmStatusStore } from "../../stores/VmStatusStore";
 import { rseToItem } from "../../utils/rseTransform";
+import { useRseStore } from "../../stores/RseStore";
 
 
 const TOPICS = {
@@ -202,6 +203,11 @@ export async function handleRseStatus(buf) {
 
   const item = rseToItem(data); // { id: serial, ... }
 
+  try {
+    useRseStore.getState().upsertRseStatus(item.id, serial, data);
+  } catch (e) {
+    console.warn("RseStore ingest failed:", e);
+  }
   if (typeof window !== "undefined" && typeof window.__pushRseItem === "function") {
     window.__pushRseItem(item);  // MonitoringDeviceList로 업서트
   }

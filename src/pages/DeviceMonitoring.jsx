@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { Card } from "../components/common/Card";
 import MonitoringDeviceList from "../components/monitor/MonitoringDeviceList";
 import { BookCheck, ShieldCheck, ShieldOff, CircleX } from "lucide-react";
@@ -10,6 +10,7 @@ import { Info } from "lucide-react";
 import HealthIssuesModal from "../components/monitor/HealthIssuesModal";
 import CertificateModal from "../components/monitor/CertificateModal";
 import DebugInfoModal from "../components/monitor/DebugInfoModal";
+import Donut from "../components/common/Donut";
 
 export default function DeviceMonitoring() {
   const [loading, setLoading] = useState(false);
@@ -81,6 +82,20 @@ function SummaryPanel({ selected, series, latest }) {
   const [openIssues, setOpenIssues] = useState(false);
   const [openCert, setOpenCert] = useState(false);
   const [openDebug, setOpenDebug] = useState(false);
+  const setWarning = useMetricsStore((s) => s.setWarning);
+
+  const health = selected?.health;
+  const okPct =
+    (health && typeof health === "object")
+      ? Number(health.healthPct ?? health.pct ?? 0)
+      : (Number.isFinite(health) ? Number(health) : 0);
+  
+  useEffect(() => {
+    if (!selected?.id) return;
+    const valid = Number.isFinite(okPct);
+    const isWarn = valid ? okPct !== 100 : false;
+    setWarning(selected.id, isWarn);
+  }, [selected?.id, okPct, setWarning]);
 
   if (!selected) {
     return (
@@ -90,13 +105,9 @@ function SummaryPanel({ selected, series, latest }) {
     );
   }
 
-  const health = selected?.health;
-  const okPct =
-    (health && typeof health === "object")
-      ? Number(health.healthPct ?? health.pct ?? 0)
-      : (Number.isFinite(health) ? Number(health) : 0);
   const badPct = Math.max(0, 100 - okPct);
   const snrBars = Number.isFinite(selected?.bars) ? selected.bars : 0;
+
   // TODO: 차후 데이터 시트 변경되면 실제 RSSI 값으로 변경해야 함.
   const dbm = Number.isFinite(selected?.rssiDbm) ? selected.rssiDbm : null;
   const dday = Number.isFinite(selected?.certDaysLeft) ? selected.certDaysLeft : null;
@@ -117,10 +128,10 @@ function SummaryPanel({ selected, series, latest }) {
   const tamperOn = !!selected?.__raw?.tamper_secure_status;  // 물리보안 적용중?
   const certExpired = dday == null ? true : dday < 0;         // 만료/정보없음 → 위험 처리
 
-  // --- [NEW] 공통 스타일
+  // --- 공통 스타일
   const baseTile = "h-36 col-span-2 device-inspection-icon-btn transition-colors";
   const okTile = "bg-emerald-900/90 ring-1 ring-emerald-500/30";
-  const dangerTile = "bg-rose-900/90 ring-1 ring-rose-500/70 animate-pulse";
+  const warnTile = "bg-yellow-900/90 ring-1 animate-pulse";
 
   function deriveIssues(h) {
     if (!h) return [];
@@ -195,7 +206,7 @@ function SummaryPanel({ selected, series, latest }) {
             : (d == null ? "unknown" : (d >= 0 ? "ok" : "expired"));
 
           // 4) 매핑(아이콘/색/라벨)
-          const TileBy  = { ok: okTile, expired: dangerTile, disabled: dangerTile, unknown: dangerTile };
+          const TileBy  = { ok: okTile, expired: warnTile, disabled: warnTile, unknown: warnTile };
           const IconBy  = { ok: BookCheck, expired: CircleX, disabled: CircleX, unknown: CircleX };
           const iconCls = certState === "ok" ? "text-emerald-300" : "text-rose-200";
           const textCls = certState === "ok" ? "text-emerald-200" : "text-rose-200 font-semibold";
@@ -218,7 +229,7 @@ function SummaryPanel({ selected, series, latest }) {
             <>
               {/* 물리 보안 */}
               <button
-                className={`${baseTile} ${tamperOn ? okTile : dangerTile}`}
+                className={`${baseTile} ${tamperOn ? okTile : warnTile}`}
                 title={tamperOn ? "물리 보안: 적용 중" : "물리 보안: 비활성 — 조치 필요"}
                 aria-live="polite"
               >
@@ -254,16 +265,16 @@ function SummaryPanel({ selected, series, latest }) {
           aria-label="비정상 항목 보기"
           title="비정상 항목 보기">
           <div className="relative w-36 h-36">
-            <div
-              className="absolute inset-0 rounded-full rotate-180"
-              style={{ background: `conic-gradient(#28B555 0 ${okPct}%, #FF4D4D 0 ${okPct + badPct}%)` }}
-              aria-label="HW health"
-              title={`정상 ${okPct}% / 주의 ${badPct}%`}
-            />
-            <div className="absolute inset-[10px] rounded-full bg-[#0f172a]" />
-            <div className="absolute inset-0 grid place-items-center">
-              <span className="text-slate-200 text-2xl font-semibold">{okPct}%</span>
-            </div>
+            <Donut
+              value={okPct}
+              variant="conic"
+              size={144}
+              stroke={18}
+              className=""
+              title={`정상 ${okPct}%`}
+              aria-label="current status"
+              formatValue={(v) => `${v}%`}              
+            />  
           </div>
         </button>
         <SystemResourcePanel 
