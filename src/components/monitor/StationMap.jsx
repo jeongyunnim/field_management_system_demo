@@ -18,7 +18,7 @@ L.Icon.Default.mergeOptions({
 
 // 차량 아이콘
 const carIcon = new L.Icon({
-  iconUrl: "/icons/car-icon.png",
+  iconUrl: "/assets/Vehicle.png",
   iconSize: [32, 32],
   iconAnchor: [16, 16],
   popupAnchor: [0, -16],
@@ -26,7 +26,7 @@ const carIcon = new L.Icon({
 
 // 스테이션 아이콘
 const stationIcon = new L.Icon({
-  iconUrl: "/icons/station-icon.png",
+  iconUrl: "/assets/RSE.png",
   iconSize: [32, 32],
   iconAnchor: [16, 32],
   popupAnchor: [0, -32],
@@ -190,7 +190,6 @@ function StationMapImpl({
   latitude,
   longitude,
   heading = 0,
-  stations = [],
 }) {
   // 항상 맵은 렌더 → 좌표가 없으면 기본 좌표 사용
   const norm = normalizeLatLon(latitude, longitude);
@@ -220,23 +219,6 @@ function StationMapImpl({
           {center.lat.toFixed(6)}, {center.lon.toFixed(6)}
         </Popup>
       </Marker>
-
-      {/* 스테이션 마커 */}
-      {(stations || []).map((station, idx) => (
-        <Marker key={idx} position={[station.lat, station.lon]} icon={stationIcon}>
-          <Popup>
-            <strong>{station.name ?? `Station #${idx + 1}`}</strong><br />
-            {station.l2id && <>L2ID: {station.l2id}<br /></>}
-            {Number.isFinite(station.distanceKm) && (
-              <>
-                거리: {Number(station.distanceKm) < 1
-                  ? `${(Number(station.distanceKm) * 1000).toFixed(1)} m`
-                  : `${Number(station.distanceKm).toFixed(1)} km`}
-              </>
-            )}
-          </Popup>
-        </Marker>
-      ))}
 
       <RecenterMap lat={center.lat} lon={center.lon} autoFollow={autoFollow && !isFallback} />
       <MapInteractions onUserInteract={() => setAutoFollow(false)} />

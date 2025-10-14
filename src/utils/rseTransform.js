@@ -1,76 +1,58 @@
 // utils/rseTransform.js
+import { rssiToBars } from "./signal";
 
-// --- HDOP → 0~4 막대 ---
-function hdopToBars(hdop) {
-  const v = Number(hdop);
-  if (!Number.isFinite(v)) return 0;
-  if (v <= 0.8) return 4;
-  if (v <= 1.5) return 3;
-  if (v <= 3.0) return 2;
-  if (v <= 6.0) return 1;
-  return 0;
-}
+// 건강도는 Summary 객체로만 일관
+export function computeHealthSummary(m) {
+  const LIMITS = { cpuMax: 85, memMax: 85, diskMax: 85, tempMax: 80 };
 
-// --- HDOP → "dBm풍" 숫자 (임시 시각화용) ---
-function hdopToDbm(hdop) {
-  const v = Number(hdop);
-  if (!Number.isFinite(v)) return null;
-  const clamped = Math.min(Math.max(v, 0), 6);
-  const score = -120 + Math.round((6 - clamped) * 10); // 0.8≈-60, 1.5≈-70, 3≈-90, 6≈-110
-  return Math.max(-120, Math.min(-50, score));
-}
+  const flags = {
+    gnssAntenna: !!m?.gnss_antenna_status,
+    lteAntenna1: !!m?.ltev2x_antenna1_status,
+    lteAntenna2: !!m?.ltev2x_antenna2_status,
+    v2xUsb:      !!m?.v2x_usb_status,
+    v2xSpi:      !!m?.v2x_spi_status,
+    sramVbat:    !!m?.sram_vbat_status,
+    ppsSync:     !!m?.secton_1pps_status,
+  };
 
-// --- Health(0~100): HW 60 + CPU/MEM/DISK/TEMP 각 10 - 1PPS 패널티 ---
-function computeHealth(m) {
-  const ok = (x) => (x ? 1 : 0);
-
-  const hwScore =
-    ok(m.gnss_antenna_status) +
-    ok(m.ltev2x_antenna1_status) +
-    ok(m.ltev2x_antenna2_status) +
-    ok(m.v2x_usb_status) +
-    ok(m.v2x_spi_status) +
-    ok(m.sram_vbat_status);
-  const hwPct = (hwScore / 6) * 60;
-
-  const cpu = Number(m?.cpu_usage_status?.cpu_usage_total_percent);
-  const cpuPct = Number.isFinite(cpu) ? Math.max(0, 100 - cpu) : 0;
-
-  const mem = Number(m?.memory_usage_status?.memory_usage_percent);
-  const memPct = Number.isFinite(mem) ? Math.max(0, 100 - mem) : 0;
-
+  const cpu  = Number(m?.cpu_usage_status?.cpu_usage_total_percent);
+  const mem  = Number(m?.memory_usage_status?.memory_usage_percent);
   const disk = Number(m?.storage_usage_status?.storage_usage_percent);
-  const diskPct = Number.isFinite(disk) ? Math.max(0, 100 - disk) : 0;
+  const temp = Number(m?.temperature_status?.temperature_celsius);
 
-  const t = Number(m?.temperature_status?.temperature_celsius);
-  const tempPenalty = Number.isFinite(t)
-    ? (t <= 40 ? 0 : (t >= 80 ? 40 : ((t - 40) / 40) * 40))
-    : 20; // 측정치 없으면 약간 감점
-  const tempPct = Math.max(0, 40 - tempPenalty);
+  flags.cpuOk  = Number.isFinite(cpu)  ? cpu  <= LIMITS.cpuMax  : false;
+  flags.memOk  = Number.isFinite(mem)  ? mem  <= LIMITS.memMax  : false;
+  flags.diskOk = Number.isFinite(disk) ? disk <= LIMITS.diskMax : false;
+  flags.tempOk = Number.isFinite(temp) ? temp <= LIMITS.tempMax : false;
 
-  const ppsPenalty = m?.secton_1pps_status ? 0 : 10;
+  const keys = Object.keys(flags);
+  const okCount = keys.reduce((a, k) => a + (flags[k] ? 1 : 0), 0);
+  const pct = Math.round((okCount / keys.length) * 100);
 
-  const score =
-    hwPct +
-    cpuPct * 0.10 +
-    memPct * 0.10 +
-    diskPct * 0.10 +
-    tempPct * 0.10 -
-    ppsPenalty;
-
-  return Math.max(0, Math.min(100, Math.round(score)));
+  const labels = {
+    gnssAntenna: "GNSS 안테나",
+    lteAntenna1: "LTE-V2X 안테나1",
+    lteAntenna2: "LTE-V2X 안테나2",
+    v2xUsb:      "V2X USB",
+    v2xSpi:      "V2X SPI",
+    sramVbat:    "SRAM VBAT",
+    ppsSync:     "1PPS 동기",
+    cpuOk:       "CPU 사용률",
+    memOk:       "메모리 사용률",
+    diskOk:      "스토리지 사용률",
+    tempOk:      "온도",
+  };
+  const issues = keys.filter(k => !flags[k]).map(k => labels[k] || k);
+  return { pct, flags, issues };
 }
 
-// --- 인증서 D-day (2004-01-01 epoch 고정) ---
-function certDaysLeft2004(endSec) {
+export function certDaysLeft2004(endSec) {
   const end = Number(endSec);
   if (!Number.isFinite(end)) return null;
-  const epoch2004 = Date.UTC(2004, 0, 1);     // ms
-  const now = Date.now();                     // ms
-  return Math.ceil((epoch2004 + end * 1000 - now) / 86400000);
+  const epoch2004 = Date.UTC(2004, 0, 1);
+  return Math.ceil((epoch2004 + end * 1000 - Date.now()) / 86400000);
 }
 
-// --- 좌표 스케일 해제 ---
 function pickCoords(m) {
   const latScaled = Number(m?.gnss_data?.latitude);
   const lonScaled = Number(m?.gnss_data?.longitude);
@@ -80,44 +62,34 @@ function pickCoords(m) {
   return null;
 }
 
-// --- 메인 변환기: 원본 RSE JSON → 화면에서 바로 쓰는 아이템 ---
 export function rseToItem(m) {
   const serial = String(m?.serial_number ?? "");
-  const hdop = Number(m?.gnss_data?.hdop);
-
-  const health = computeHealth(m);
-  const bars = hdopToBars(hdop);
-  // TODO: 차후 실제 값으로 바인딩 해야 함.
-  const signalDbm =  75;
-  const certDaysLeft = certDaysLeft2004(m?.certificate?.ltev2x_cert_valid_end);
-
-  const cpu = Number(m?.cpu_usage_status?.cpu_usage_total_percent);
-  const mem = Number(m?.memory_usage_status?.memory_usage_percent);
-  const disk = Number(m?.storage_usage_status?.storage_usage_percent);
-  const t = Number(m?.temperature_status?.temperature_celsius);
+  const rssiDbm = Number(m?.lte?.rssi_dbm);
+  const bars = Number.isFinite(rssiDbm) ? rssiToBars(rssiDbm) : 0;
 
   return {
-    // 식별/표시
     id: serial,
     serial,
 
-    // 요약 UI 필드
     active: !!(m?.ltev2x_tx_ready_status || m?.gnss_antenna_status),
-    health,                 // 0~100 (도넛)
-    bars,                   // 0~4   (막대)
-    signalDbm,              // null 또는 숫자 (라벨 "dBm")
+
+    // 건강도: 객체
+    health: computeHealthSummary(m),
+
+    bars,
+    // GNSS 품질 막대만
+    rssiDbm,
+
     securityEnabled: !!m?.certificate?.ltev2x_cert_status_security_enable,
-    certDaysLeft,           // null | 0.. | 음수(만료 경과)
+    certDaysLeft: certDaysLeft2004(m?.certificate?.ltev2x_cert_valid_end),
 
-    // 지도/리소스(optional)
     coords: pickCoords(m),
-    temperatureC: Number.isFinite(t) ? t : null,
-    cpuTotalPct: Number.isFinite(cpu) ? cpu : null,
-    memUsedPct: Number.isFinite(mem) ? mem : null,
-    diskUsedPct: Number.isFinite(disk) ? disk : null,
+    temperatureC: Number(m?.temperature_status?.temperature_celsius) || null,
+    cpuTotalPct: Number(m?.cpu_usage_status?.cpu_usage_total_percent) || null,
+    memUsedPct: Number(m?.memory_usage_status?.memory_usage_percent) || null,
+    diskUsedPct: Number(m?.storage_usage_status?.storage_usage_percent) || null,
 
-    // 메타
     updatedAt: Date.now(),
-    __raw: m,               // 원본 보관 (디버그/추가 표시)
+    __raw: m,
   };
 }

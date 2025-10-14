@@ -1,11 +1,15 @@
 import { useState, useMemo } from "react";
 import { Card } from "../components/common/Card";
 import MonitoringDeviceList from "../components/monitor/MonitoringDeviceList";
-import { BookCheck, ShieldCheck, RefreshCcw } from "lucide-react";
+import { BookCheck, ShieldCheck, ShieldOff, CircleX } from "lucide-react";
 import SystemResourcePanel from "../components/monitor/SystemResourcePanel";
 import Led from "../components/common/Led";
 import SignalBars from "../components/common/SignalBars";
 import { useMetricsStore } from "../stores/MetricsStore";
+import { Info } from "lucide-react";
+import HealthIssuesModal from "../components/monitor/HealthIssuesModal";
+import CertificateModal from "../components/monitor/CertificateModal";
+import DebugInfoModal from "../components/monitor/DebugInfoModal";
 
 export default function DeviceMonitoring() {
   const [loading, setLoading] = useState(false);
@@ -38,30 +42,9 @@ export default function DeviceMonitoring() {
   return (
     <div className="grid w-full h-full">
       {/* 좌: 요약 + 리스트 */}
-      <Card className="p-4 overflow-hidden flex flex-col min-h-0">
+      <Card className="p-4 overflow-hidden gap-2">
         <div className="flex items-start justify-between mb-3">
           <h2 className="main-card-title">장치 모니터링</h2>
-          <div className="flex gap-2">
-            <button
-              className="btn-sm btn-text-sm inline-flex items-center gap-1"
-              onClick={async () => {
-                const ok = window.confirm("DB 초기화할까요?");
-                if (!ok) return;
-                setLoading(true);
-                try {
-                  console.log("DB 초기화");
-                } catch (e) {
-                  console.error(e);
-                } finally {
-                  setLoading(false);
-                }
-              }}
-              disabled={loading}
-              title="DB 초기화"
-            >
-              <RefreshCcw size={16} /> DB 초기화
-            </button>
-          </div>
         </div>
 
         {/* 상단 비주얼 요약 */}
@@ -80,17 +63,14 @@ export default function DeviceMonitoring() {
         />
 
         {/* 하단 리스트(클릭 → 위 패널/요약 갱신) */}
-        <div className="mt-4 min-h-0">
-          <MonitoringDeviceList
-            className="h-full"
-            selectedId={selectedId}
-            onSelect={(it) => {
-              // it: { id (serial), ... } — 리스트 아이템
-              setSelected(it.id);      // 전역 선택ID(누적 시계열 바인딩은 이 값으로)
-              setSelectedLocal(it);    // 요약 패널은 아이템 객체 그대로 사용
-            }}
-          />
-        </div>
+        <MonitoringDeviceList
+          selectedId={selectedId}
+          onSelect={(it) => {
+            // it: { id (serial), ... } — 리스트 아이템
+            setSelected(it.id);      // 전역 선택ID(누적 시계열 바인딩은 이 값으로)
+            setSelectedLocal(it);    // 요약 패널은 아이템 객체 그대로 사용
+          }}
+        />
       </Card>
     </div>
   );
@@ -98,6 +78,10 @@ export default function DeviceMonitoring() {
 
 /* ================== 상단 요약 패널 ================== */
 function SummaryPanel({ selected, series, latest }) {
+  const [openIssues, setOpenIssues] = useState(false);
+  const [openCert, setOpenCert] = useState(false);
+  const [openDebug, setOpenDebug] = useState(false);
+
   if (!selected) {
     return (
       <div className="rounded-xl ring-1 ring-white/10 bg-[#122033]/60 p-4">
@@ -105,12 +89,50 @@ function SummaryPanel({ selected, series, latest }) {
       </div>
     );
   }
-  const okPct = Number.isFinite(selected.health) ? selected.health : 0;
-  const badPct = Math.max(0, 100 - okPct);
-  const snrBars = selected.bars ?? 0;
-  const dbm = (typeof selected.signalDbm === "number") ? selected.signalDbm : null;
-  const dday = selected.certDaysLeft ?? null;
 
+  const health = selected?.health;
+  const okPct =
+    (health && typeof health === "object")
+      ? Number(health.healthPct ?? health.pct ?? 0)
+      : (Number.isFinite(health) ? Number(health) : 0);
+  const badPct = Math.max(0, 100 - okPct);
+  const snrBars = Number.isFinite(selected?.bars) ? selected.bars : 0;
+  // TODO: 차후 데이터 시트 변경되면 실제 RSSI 값으로 변경해야 함.
+  const dbm = Number.isFinite(selected?.rssiDbm) ? selected.rssiDbm : null;
+  const dday = Number.isFinite(selected?.certDaysLeft) ? selected.certDaysLeft : null;
+  const FALLBACK_LABELS = {
+    gnssAntenna: "GNSS 안테나",
+    lteAntenna1: "LTE-V2X 안테나1",
+    lteAntenna2: "LTE-V2X 안테나2",
+    v2xUsb: "V2X USB",
+    v2xSpi: "V2X SPI",
+    sramVbat: "SRAM VBAT",
+    ppsSync: "1PPS 동기",
+    cpuOk: "CPU 사용률",
+    memOk: "메모리 사용률",
+    diskOk: "스토리지 사용률",
+    tempOk: "온도",
+  };
+
+  const tamperOn = !!selected?.__raw?.tamper_secure_status;  // 물리보안 적용중?
+  const certExpired = dday == null ? true : dday < 0;         // 만료/정보없음 → 위험 처리
+
+  // --- [NEW] 공통 스타일
+  const baseTile = "h-36 col-span-2 device-inspection-icon-btn transition-colors";
+  const okTile = "bg-emerald-900/90 ring-1 ring-emerald-500/30";
+  const dangerTile = "bg-rose-900/90 ring-1 ring-rose-500/70 animate-pulse";
+
+  function deriveIssues(h) {
+    if (!h) return [];
+    if (Array.isArray(h.issues) && h.issues.length > 0) return h.issues;
+    const flags = h.flags && typeof h.flags === "object" ? h.flags : null;
+    if (!flags) return [];
+    return Object.entries(flags)
+      .filter(([_, v]) => v === false)       // 실패한 불리언만
+      .map(([k]) => FALLBACK_LABELS[k] || k) // 라벨 매핑
+  }
+
+  const issues = deriveIssues(health);
   return (
     <div className="rounded-xl ring-1 ring-white/10 bg-[#122033]/80 p-4 text-slate-300 text-sm">
       <div className="grid grid-cols-12 gap-2 items-center">
@@ -124,50 +146,113 @@ function SummaryPanel({ selected, series, latest }) {
           </div>
         </div>
 
-        {/* 신호 */}
         <div className="col-start-6 col-span-5 flex items-end gap-1 mb-2" aria-label="신호 세기">
           <SignalBars bars={snrBars} />
           <span className="ml-2">{dbm != null ? `${dbm} dBm` : "-"}</span>
         </div>
 
-        {/* 임의 버튼 */}
+        {/* 액션 버튼들 */}
         <div className="col-span-2 device-inspection-icon-btn bg-rose-900/90">
           <span>재부팅</span>
         </div>
-
-        {/* 액션 버튼들 */}
         <div className="flex justify-between col-span-12 space-x-2">
-          <div className="w-40 flex-auto device-inspection-icon-btn justify-center bg-cyan-900/90">
+          <button className="w-40 flex-auto device-inspection-icon-btn justify-center bg-cyan-900/90">
             <span>MAP Data 업데이트</span>
-          </div>
-          <div className="w-40 flex-auto device-inspection-icon-btn justify-center bg-cyan-900/90">
+          </button>
+          <button className="w-40 flex-auto device-inspection-icon-btn justify-center bg-cyan-900/90">
             <span>장치제어(SNMP)</span>
-          </div>
-          <div className="w-40 flex-auto device-inspection-icon-btn justify-center bg-cyan-900/90">
+          </button>
+          <button className="w-40 flex-auto device-inspection-icon-btn justify-center bg-cyan-900/90">
             <span>S/W 업데이트</span>
-          </div>
-          <div className="w-40 flex-auto device-inspection-icon-btn justify-center bg-cyan-900/90">
+          </button>
+          <button
+            type="button"
+            onClick={() => setOpenDebug(true)}
+            className="w-40 flex-auto device-inspection-icon-btn justify-center bg-cyan-900/90"
+            title="전체 정보 보기/저장"
+          >  
             <span>디버그 정보 저장</span>
-          </div>
+          </button>
         </div>
 
         {/* 카드들 */}
-        <div className="h-36 col-span-2 device-inspection-icon-btn bg-emerald-900/90">
-          <span>물리 보안</span>
-          <ShieldCheck size={50} />
-          <span>{selected.__raw?.tamper_secure_status ? "적용 중" : "미적용"}</span>
-        </div>
+        {(() => {
+          // 물리보안 (그대로)
+          const SecurityIcon = tamperOn ? ShieldCheck : ShieldOff;
 
-        <div className="h-36 col-span-2 device-inspection-icon-btn bg-emerald-900/90">
-          <span>인증서</span>
-          <BookCheck size={50} />
-          <span>
-            {dday != null ? (dday >= 0 ? `D-${dday}` : `만료 ${-dday}일`) : "정보 없음"}
-          </span>
-        </div>
+          // 1) 활성 여부: ltev2x_cert_status_security_enable 최우선
+          const rawEnable = selected?.__raw?.ltev2x_cert_status_security_enable;
+          const certEnabled =
+            rawEnable === true || rawEnable === 1 || rawEnable === "1" ||
+            rawEnable === "Y" || rawEnable === "y";
+
+          // 2) D-day: 활성일 때만 의미 있음
+          const d = certEnabled ? (Number.isFinite(dday) ? dday : null) : null;
+
+          // 3) 상태 결정: disabled | ok | expired | unknown(활성인데 D-day없음)
+          const certState = !certEnabled
+            ? "disabled"
+            : (d == null ? "unknown" : (d >= 0 ? "ok" : "expired"));
+
+          // 4) 매핑(아이콘/색/라벨)
+          const TileBy  = { ok: okTile, expired: dangerTile, disabled: dangerTile, unknown: dangerTile };
+          const IconBy  = { ok: BookCheck, expired: CircleX, disabled: CircleX, unknown: CircleX };
+          const iconCls = certState === "ok" ? "text-emerald-300" : "text-rose-200";
+          const textCls = certState === "ok" ? "text-emerald-200" : "text-rose-200 font-semibold";
+          const labelBy = {
+            ok:      `D-${d}`,
+            expired: `만료 ${-d}일`,
+            disabled:"비활성화",
+            unknown: "정보 없음",
+          };
+          const titleBy = {
+            ok:      "인증서 유효",
+            expired: `인증서 만료 ${-d}일 — 조치 필요`,
+            disabled:"인증서 비활성화 — 조치 필요",
+            unknown: "인증서 D-day 정보 없음 — 조치 필요",
+          };
+
+          const CertIcon = IconBy[certState];
+
+          return (
+            <>
+              {/* 물리 보안 */}
+              <button
+                className={`${baseTile} ${tamperOn ? okTile : dangerTile}`}
+                title={tamperOn ? "물리 보안: 적용 중" : "물리 보안: 비활성 — 조치 필요"}
+                aria-live="polite"
+              >
+                <span>물리 보안</span>
+                <SecurityIcon size={50} className={tamperOn ? "text-emerald-300" : "text-rose-200"} />
+                <span className={tamperOn ? "text-emerald-200" : "text-rose-200 font-semibold"}>
+                  {tamperOn ? "적용 중" : "미적용"}
+                </span>
+              </button>
+
+              {/* 인증서 */}
+              <button
+                type="button"
+                onClick={() => setOpenCert(true)}
+                className={`${baseTile} ${TileBy[certState]}`}
+                title={titleBy[certState]}
+                aria-live="polite"
+              >
+                <span>인증서</span>
+                <CertIcon size={50} className={iconCls} />
+                <span className={textCls}>{labelBy[certState]}</span>
+              </button>
+            </>
+          );
+        })()}
+
 
         {/* Health 도넛 */}
-        <div className="col-span-4 row-span-2 flex items-center justify-center gap-4">
+        <button 
+          type="button"
+          className="col-span-4 row-span-2 flex items-center justify-center gap-4"
+          onClick={() => setOpenIssues(true)}
+          aria-label="비정상 항목 보기"
+          title="비정상 항목 보기">
           <div className="relative w-36 h-36">
             <div
               className="absolute inset-0 rounded-full rotate-180"
@@ -180,7 +265,7 @@ function SummaryPanel({ selected, series, latest }) {
               <span className="text-slate-200 text-2xl font-semibold">{okPct}%</span>
             </div>
           </div>
-        </div>
+        </button>
         <SystemResourcePanel 
           cpuSeries={series?.cpu ?? []}
           emmcSeries={series?.emmc ?? []}
@@ -190,6 +275,25 @@ function SummaryPanel({ selected, series, latest }) {
           ramValue={latest?.ram}
         />
       </div>
+      <HealthIssuesModal
+        open={openIssues}
+        onClose={() => setOpenIssues(false)}
+        issues={issues}
+        title="정상 상태가 아닌 항목"
+      />
+
+      <CertificateModal
+        open={openCert}
+        onClose={() => setOpenCert(false)}
+        certificate={selected?.__raw?.certificate ?? selected?.certificate}
+        certDaysLeft={selected?.certDaysLeft}
+      />
+
+      <DebugInfoModal
+        open={openDebug}
+        onClose={() => setOpenDebug(false)}
+        selected={selected}
+      />
     </div>
   );
 }

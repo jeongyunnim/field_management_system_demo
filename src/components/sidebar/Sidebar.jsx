@@ -32,7 +32,7 @@ export default function Sidebar({ activePage, setActivePage, isCollapsed, setIsC
           <img
             src="/logo_white.png"
             alt="DYNAVISTA"
-            className={"object-contain w-32"}
+            className={isCollapsed ? "w-20 p-2" : "w-32"}
           />
         </div>
       </div>

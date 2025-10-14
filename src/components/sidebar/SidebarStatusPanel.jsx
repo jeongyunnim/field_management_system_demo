@@ -5,7 +5,7 @@ import { Activity, Radio, Navigation2 } from "lucide-react";
 // 작은 뱃지
 const Badge = ({ ok, lte = false }) => (
   <span
-    className={`inline-block h-3 w-10 rounded-full shadow 
+    className={`inline-block h-3 w-7 rounded-full shadow 
       ${ok ? "bg-[#32E36C] animate-pulse" : "bg-slate-600/60"}
       ${lte ? "mr-1" : ""}`}
   />
@@ -60,48 +60,46 @@ export default function SidebarStatusPanel({
         </div>
 
         {isCollapsed ? (
-            <span className={`h-4 w-6 rounded-full ${v2xReady ? "bg-emerald-400" : "bg-slate-600/60"}`} />
+          <></>
         ) : (
-          <>
-            <div className="grid gap-2">
-              <div className="rounded-lg border border-slate-600/60 bg-slate-700/60 px-2 py-1">
-                <div className="flex items-center justify-between side-status-title font-semibold">
-                  <span>LTE-V2X</span>
-                  <Badge ok={!!v2xReady} lte={true} />
-                </div>
-              </div>
-
-              <div className="rounded-lg border border-slate-600/60 bg-slate-700/60 px-2 py-1">
-                <div className="flex items-center gap-1 side-status-title font-semibold border-b-indigo-500 fms-bt">
-                  <span>채널</span>
-                </div>
-                <div className="mt-1 space-y-0.5 side-status-title">
-                  <Row label="Frequency" value={freqMHz != null ? `${freqMHz} MHz` : <Skel />} mono />
-                  <Row label="Band Width" value={bwMHz   != null ? `${bwMHz} MHz`   : <Skel />} mono />
-                </div>
-              </div>
-
-              <div className="rounded-lg border border-slate-600/60 bg-slate-700/60 px-2 py-1">
-                <div className="side-status-title font-semibold fms-bt">Packet TX/RX</div>
-                <div className="mt-1 space-y-0.5 side-status-title">
-                  <Row label="TX" value={txCount != null ? txCount.toLocaleString() : <Skel />} mono />
-                  <Row label="RX" value={rxCount != null ? rxCount.toLocaleString() : <Skel />} mono />
-                </div>
-              </div>
-
-              {/* GNSS 박스 */}
-              <div className="rounded-xl border border-slate-600/70 bg-slate-700/50 px-3 py-1">
-                <div className="flex items-center gap-2 text-slate-200 mb-1.5 fms-bt">
-                  <span className="side-status-title font-semibold ">GNSS</span>
-                </div>
-                <div className="grid grid-cols-1 gap-x-3 gap-y-1 side-status-title">
-                  <Row label="mode"    value={gnss.mode ?? <Skel />} />
-                  <Row label="위도"    value={gnss.lat != null ? gnss.lat : <Skel />} mono />
-                  <Row label="경도"    value={gnss.lon != null ? gnss.lon : <Skel />} mono />
-                </div>
+          <div className="grid gap-2">
+            <div className="rounded-lg border border-slate-600/60 bg-slate-700/60 px-2 py-1">
+              <div className="flex items-center justify-between side-status-title font-semibold">
+                <span>LTE-V2X</span>
+                <Badge ok={!!v2xReady} lte={true} />
               </div>
             </div>
-          </>
+
+            <div className="rounded-lg border border-slate-600/60 bg-slate-700/60 px-2 py-1">
+              <div className="flex items-center gap-1 side-status-title font-semibold border-b-indigo-500 fms-bt">
+                <span>채널</span>
+              </div>
+              <div className="mt-1 space-y-0.5 side-status-title">
+                <Row label="Frequency" value={freqMHz != null ? `${freqMHz} MHz` : <Skel />} mono />
+                <Row label="Band Width" value={bwMHz   != null ? `${bwMHz} MHz`   : <Skel />} mono />
+              </div>
+            </div>
+
+            <div className="rounded-lg border border-slate-600/60 bg-slate-700/60 px-2 py-1">
+              <div className="side-status-title font-semibold fms-bt">Packet TX/RX</div>
+              <div className="mt-1 space-y-0.5 side-status-title">
+                <Row label="TX" value={txCount != null ? txCount.toLocaleString() : <Skel />} mono />
+                <Row label="RX" value={rxCount != null ? rxCount.toLocaleString() : <Skel />} mono />
+              </div>
+            </div>
+
+            {/* GNSS 박스 */}
+            <div className="rounded-xl border border-slate-600/70 bg-slate-700/50 px-3 py-1">
+              <div className="flex items-center gap-2 text-slate-200 mb-1.5 fms-bt">
+                <span className="side-status-title font-semibold ">GNSS</span>
+              </div>
+              <div className="grid grid-cols-1 gap-x-3 gap-y-1 side-status-title">
+                <Row label="mode"    value={gnss.mode ?? <Skel />} />
+                <Row label="위도"    value={gnss.lat != null ? gnss.lat : <Skel />} mono />
+                <Row label="경도"    value={gnss.lon != null ? gnss.lon : <Skel />} mono />
+              </div>
+            </div>
+          </div>
         )}
       </div>
     </div>
