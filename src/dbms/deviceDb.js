@@ -27,3 +27,14 @@ export async function isDeviceRegistered(serial) {
   tsCache.set(serial, now);
   return ok;
 }
+
+export function invalidateRegistrationCache(oldSerial, newSerial) {
+  if (oldSerial) {
+    regCache.delete(oldSerial);
+    tsCache.delete(oldSerial);
+  }
+  if (newSerial) {
+    regCache.delete(newSerial);
+    tsCache.delete(newSerial);
+  }
+}

@@ -38,7 +38,7 @@ export default function SidebarStatusPanel({
   return (
     <div
       className={`
-        mt-auto p-3
+        mt-auto p-3 w-full
         ${className}
       `}
     >

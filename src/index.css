@@ -24,7 +24,7 @@ html {
 }
 
 .btn-text {
-  @apply text-2xl font-medium
+  @apply text-2xl font-normal
 }
 
 .btn-sm {
@@ -76,14 +76,13 @@ html {
     backdrop-blur-sm;
 }
 
-/* 바깥 래퍼: Leaflet이 여기 translate3d를 건다 */
 .rse-wrapper .rse-img {
-  width: 32px;     /* 원본이 64/128px이어도 강제로 32로 */
+  width: 32px;
   height: 32px;
   transform-origin: center bottom;
   transition: transform 120ms ease, filter 120ms ease;
 }
 .rse-wrapper .rse-img.selected {
   transform: scale(1.5);
-  filter: drop-shadow(0 0 6px rgba(37,99,235,.55));
+  filter: drop-shadow(0 0 6px rgba(0, 0, 0, 0.55));
 }

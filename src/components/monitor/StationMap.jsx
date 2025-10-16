@@ -92,31 +92,84 @@ function MapInteractions({ onUserInteract }) {
   return null;
 }
 
-// ----- 간단 추적 토글 컨트롤 -----
 function MapControl({ autoFollow, setAutoFollow }) {
   const map = useMap();
   const btnRef = useRef(null);
   const controlRef = useRef(null);
+
+  // 상태별 색상(ON/OFF)
+  const bgOn = "#2B7FFF";   // 당신이 준 버튼 색
+  const bgOff = "#BDBDBD";  // 비활성 회색
+  const textOn = "#FFFFFF";
+  const textOff = "#111827";
+  const ring = "rgba(16,185,129,0.40)"; // emerald-ish ring
+
   useEffect(() => {
     if (!map) return;
+
     const btn = document.createElement("button");
     btn.type = "button";
     btn.title = "지도를 드래그/확대하면 자동으로 꺼집니다";
     btn.innerText = autoFollow ? "추적: 켜짐" : "추적: 꺼짐";
-    btn.className = "leaflet-bar"; // 심플
-    btn.style.minWidth = "88px";
-    btn.onclick = (e) => { e.preventDefault(); e.stopPropagation(); setAutoFollow((v) => !v); };
+
+    // 기본 룩앤필 (Tailwind 없이 재현)
+    Object.assign(btn.style, {
+      position: "relative",
+      display: "inline-flex",
+      alignItems: "center",
+      justifyContent: "center",
+      userSelect: "none",
+      fontWeight: 500,                                   // font-semibold
+      fontSize: "20px",
+      letterSpacing: "-0.01em",                          // tracking-tight 근사치
+      padding: "10px 14px",                              // py-2.5 px-3.5
+      borderRadius: "12px",                              // rounded-xl
+      border: "none",
+      color: autoFollow ? textOn : textOff,
+      backgroundColor: autoFollow ? bgOn : bgOff,
+      width: "auto",
+      height: "auto",
+      lineHeight: "normal",
+      cursor: "pointer",
+      transition:
+        "background-color 120ms ease, box-shadow 120ms ease, transform 80ms ease",
+      outline: "none",
+      whiteSpace: "nowrap",
+    });
+
+    btn.onclick = (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      setAutoFollow((v) => !v);
+    };
+
     const ctl = L.control({ position: "topright" });
     ctl.onAdd = () => btn;
     ctl.addTo(map);
+
     btnRef.current = btn;
     controlRef.current = ctl;
-    return () => { try { controlRef.current?.remove?.(); } catch {}; btnRef.current = null; controlRef.current = null; };
+
+    return () => {
+      try { controlRef.current?.remove?.(); } catch {}
+      btnRef.current = null;
+      controlRef.current = null;
+    };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [map]); // mount once
-  useEffect(() => { if (btnRef.current) btnRef.current.innerText = autoFollow ? "추적: 켜짐" : "추적: 꺼짐"; }, [autoFollow]);
+  }, [map]);
+
+  // 상태 바뀔 때 최소 업데이트
+  useEffect(() => {
+    const btn = btnRef.current;
+    if (!btn) return;
+    btn.innerText = autoFollow ? "추적: 켜짐" : "추적: 꺼짐";
+    btn.style.backgroundColor = autoFollow ? bgOn : bgOff;
+    btn.style.color = autoFollow ? textOn : textOff;
+  }, [autoFollow]);
+
   return null;
 }
+
 
 // ----- RSE 마커들 -----
 function RseMarkersInline() {
@@ -141,7 +194,7 @@ function RseMarkersInline() {
         const icon = makeDivIcon(warn, selected);
         return (
           <Marker key={v.id} position={[v.gnss.lat, v.gnss.lon]} icon={icon} zIndexOffset={selected ? 1000 : 0}>
-            <Popup>
+            <Popup offset={[0, -20]}>
               <div style={{ fontSize: 12, lineHeight: 1.2 }}>
                 <div><strong>{v.serial ?? v.id}</strong></div>
                 <div>({v.gnss.lat?.toFixed?.(6)}, {v.gnss.lon?.toFixed?.(6)})</div>

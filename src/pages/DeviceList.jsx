@@ -91,7 +91,7 @@ export default function DeviceList({ setActivePage, embed = false }) {
           </button>
           <button
             className="btn-sm btn-text-sm"
-            onClick={() => alert("엑셀 등록 기능은 아직 준비 중입니다.")}
+            onClick={() => alert("엑셀 등록 기능 준비 중")}
           >
             엑셀 등록
           </button>
@@ -102,8 +102,8 @@ export default function DeviceList({ setActivePage, embed = false }) {
         <table className="w-full border-collapse">
           <thead className="bg-[#1a273a] text-slate-200">
             <tr className="text-left">
-              <Th className="w-14">
-                <label className="inline-flex items-center gap-2 select-none">
+              <Th className="w-12">
+                <label className="inline-flex items-center select-none">
                   <input
                     type="checkbox"
                     checked={allChecked}
@@ -144,9 +144,9 @@ export default function DeviceList({ setActivePage, embed = false }) {
                     aria-label={`${dev.serial ?? dev.model ?? dev.id} 선택`}
                   />
                 </Td>
-                <Td className="font-mono">{dev.serial ?? "-"}</Td>
-                <Td>{dev.model ?? "-"}</Td>
-                <Td>{dev.registeredAt ? new Date(dev.registeredAt).toLocaleString() : "-"}</Td>
+                <Td className="font-mono text-">{dev.serial ?? "-"}</Td>
+                <Td className="font-mono text-sm">{dev.model ?? "-"}</Td>
+                <Td className="text-sm">{dev.registeredAt ? new Date(dev.registeredAt).toLocaleString() : "-"}</Td>
                 <Td className="text-right">
                   <div className="inline-flex items-center gap-1.5">
                     <IconBtn title="상세보기" onClick={() => handleZoom(dev)}>
@@ -157,9 +157,6 @@ export default function DeviceList({ setActivePage, embed = false }) {
                     </IconBtn>
                     <IconBtn title="수정" onClick={() => handleEdit(dev.id)}>
                       <Pencil size={18} />
-                    </IconBtn>
-                    <IconBtn title="삭제" onClick={() => handleDelete(dev.id)}>
-                      <Trash size={18} />
                     </IconBtn>
                   </div>
                 </Td>

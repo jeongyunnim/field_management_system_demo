@@ -131,7 +131,7 @@ function SummaryPanel({ selected, series, latest }) {
   // --- 공통 스타일
   const baseTile = "h-36 col-span-2 device-inspection-icon-btn transition-colors";
   const okTile = "bg-emerald-900/90 ring-1 ring-emerald-500/30";
-  const warnTile = "bg-yellow-900/90 ring-1 animate-pulse";
+  const warnTile = "bg-yellow-900/90 ring-1";
 
   function deriveIssues(h) {
     if (!h) return [];
@@ -208,8 +208,6 @@ function SummaryPanel({ selected, series, latest }) {
           // 4) 매핑(아이콘/색/라벨)
           const TileBy  = { ok: okTile, expired: warnTile, disabled: warnTile, unknown: warnTile };
           const IconBy  = { ok: BookCheck, expired: CircleX, disabled: CircleX, unknown: CircleX };
-          const iconCls = certState === "ok" ? "text-emerald-300" : "text-rose-200";
-          const textCls = certState === "ok" ? "text-emerald-200" : "text-rose-200 font-semibold";
           const labelBy = {
             ok:      `D-${d}`,
             expired: `만료 ${-d}일`,
@@ -234,8 +232,8 @@ function SummaryPanel({ selected, series, latest }) {
                 aria-live="polite"
               >
                 <span>물리 보안</span>
-                <SecurityIcon size={50} className={tamperOn ? "text-emerald-300" : "text-rose-200"} />
-                <span className={tamperOn ? "text-emerald-200" : "text-rose-200 font-semibold"}>
+                <SecurityIcon size={50} />
+                <span>
                   {tamperOn ? "적용 중" : "미적용"}
                 </span>
               </button>
@@ -249,8 +247,8 @@ function SummaryPanel({ selected, series, latest }) {
                 aria-live="polite"
               >
                 <span>인증서</span>
-                <CertIcon size={50} className={iconCls} />
-                <span className={textCls}>{labelBy[certState]}</span>
+                <CertIcon size={50} />
+                <span>{labelBy[certState]}</span>
               </button>
             </>
           );

@@ -6,6 +6,7 @@ import { useMqttStore } from "../../stores/MqttStore";
 import { useVmStatusStore } from "../../stores/VmStatusStore";
 import { rseToItem } from "../../utils/rseTransform";
 import { useRseStore } from "../../stores/RseStore";
+import { useInspectStore } from "../../stores/InspectStore";
 
 
 const TOPICS = {
@@ -17,39 +18,45 @@ const TOPICS = {
   rseStatus: "fac/SYS_MON_PA/V2X_MAINTENANCE_HUB_PA/systemSnapshot/jsonMsg",
 };
 
-// 내부 상태
 let initialized = false;
 let offHandler = null;
-let isInspecting = false;
-let rseSubscribed = false;
-let respSubscribed = false;
 
-// 요청 대기(한 번만)
-let pendingStart = null; // { resolve, reject, timer }
-let pendingStop  = null;
+// 토픽별 1회 응답 대기 레지스트리
+const waiters = new Map(); // topic -> { resolve }
 
+function waitFor(topic, timeoutMs) {
+  return new Promise((resolve, reject) => {
+    // 타임아웃 설정
+    const timer = setTimeout(() => {
+      waiters.delete(topic);
+      reject(new Error(`Timeout waiting: ${topic}`));
+    }, timeoutMs);
+    // 등록 (resolve되면 타이머 정리)
+    waiters.set(topic, {
+      resolve: (payload) => {
+        clearTimeout(timer);
+        waiters.delete(topic);
+        resolve(payload);
+      },
+    });
+  });
+}
 
+function resolveWait(topic, payload) {
+  const w = waiters.get(topic);
+  if (w) w.resolve(payload);
+}
 // ---------- 라우팅 테이블 ----------
 const ROUTES = [
   {
     // startSystemCheck 응답
-    match: (t) => t === TOPICS.startResp && !!pendingStart,
-    handle: (_t, payload) => {
-      const { resolve, timer } = pendingStart;
-      clearTimeout(timer);
-      pendingStart = null;
-      resolve(safeJsonOrText(payload));
-    },
+    match: (t) => t === TOPICS.startResp,
+    handle: (_t, payload) => resolveWait(TOPICS.startResp, payload),
   },
   {
     // stopSystemCheck 응답
-    match: (t) => t === TOPICS.stopResp && !!pendingStop,
-    handle: (_t, payload) => {
-      const { resolve, timer } = pendingStop;
-      clearTimeout(timer);
-      pendingStop = null;
-      resolve(safeJsonOrText(payload));
-    },
+    match: (t) => t === TOPICS.stopResp,
+    handle: (_t, payload) => resolveWait(TOPICS.stopResp, payload),
   },
   {
     // 점검 중 상태 메시지 (세션 중에만 처리)
@@ -58,7 +65,7 @@ const ROUTES = [
   },
   {
     // RSE 스냅샷
-    match: (t) => t === TOPICS.rseStatus && isInspecting,
+    match: (t) => t === TOPICS.rseStatus,
     handle: (_t, payload) => handleRseStatus(payload),
   },
   // 필요한 라우트는 아래에 계속 추가…
@@ -69,11 +76,7 @@ export function initMqttBus() {
   if (initialized) return disposeMqttBus;
   const store = useMqttStore.getState();
 
-  // 전역 응답 토픽 전부 구독
-  if (!respSubscribed) {
-    store.subscribeTopics([TOPICS.startResp, TOPICS.stopResp, TOPICS.vmStatus], { qos: 1 });
-    respSubscribed = true;
-  }
+  store.subscribeTopics([TOPICS.startResp, TOPICS.stopResp, TOPICS.vmStatus], { qos: 1 });
 
   // 공용 메시지 핸들러(= 라우터)
   offHandler = store.addMessageHandler((topic, payload /*, packet */) => {
@@ -94,87 +97,68 @@ export function disposeMqttBus() {
   if (!initialized) return;
   offHandler?.(); offHandler = null;
 
-  // pending 정리
-  if (pendingStart) { 
-    clearTimeout(pendingStart.timer); 
-    pendingStart.reject?.(new Error("startSystemCheck: disposed")); 
-    pendingStart = null; 
-  }
-  if (pendingStop)  { 
-    clearTimeout(pendingStop.timer);  
-    pendingStop.reject?.(new Error("stopSystemCheck: disposed"));  
-    pendingStop  = null; 
-  }
-
-  // 전역 구독 해제
-  if (respSubscribed) {
-    try { 
-      useMqttStore.getState().unsubscribeTopics([TOPICS.startResp, TOPICS.stopResp, TOPICS.vmStatus]); 
-    } catch {}
-    respSubscribed = false;
-  }
-  if (rseSubscribed) {
-    try { 
-      useMqttStore.getState().unsubscribeTopics([TOPICS.rseStatus]); 
-    } catch {}
-    rseSubscribed = false;
-  }
-  isInspecting = false;
+  try {
+    useMqttStore.getState().unsubscribeTopics([
+      TOPICS.startResp, TOPICS.stopResp, TOPICS.vmStatus, TOPICS.rseStatus,
+    ]);
+  } catch {}
   initialized = false;
 }
 
 // ---------- 요청/응답 ----------
 export function request(command, payload = {}, { timeoutMs = 10000, qos = 1, retain = false } = {}) {
+  const mqtt = useMqttStore.getState();
+  const inspect = useInspectStore.getState();
+
   if (command === "startSystemCheck") {
-    return requestOnce(TOPICS.startReq, "start", payload, { timeoutMs, qos, retain });
+    if (inspect.phase !== "idle") return Promise.resolve(null); // 버튼 비활성 상태에서 보호
+    inspect.setPhase("requesting");
+    const body = typeof payload === "string" ? payload : JSON.stringify(payload);
+    mqtt.publish(TOPICS.startReq, body, { qos, retain }); // pub 딱 1회
+    return waitFor(TOPICS.startResp, timeoutMs)
+      .then((resp) => {
+        inspect.setPhase("running");
+        startInspection();
+        return safeJsonOrText(resp);
+      })
+      .catch((e) => {
+        inspect.setPhase("idle"); // 실패/타임아웃 시 버튼 복구
+        throw e;
+      });
   }
+
   if (command === "stopSystemCheck") {
-    return requestOnce(TOPICS.stopReq, "stop", payload, { timeoutMs, qos, retain });
+    if (inspect.phase !== "running") return Promise.resolve(null);
+    inspect.setPhase("stopping");
+    const body = typeof payload === "string" ? payload : JSON.stringify(payload);
+    mqtt.publish(TOPICS.stopReq, body, { qos, retain }); // pub 딱 1회
+    return waitFor(TOPICS.stopResp, timeoutMs)
+      .then((resp) => {
+        inspect.setPhase("idle");
+        stopInspection();
+        return safeJsonOrText(resp);
+      })
+      .catch((e) => {
+        inspect.setPhase("running"); // 실패/타임아웃 시 다시 중단 시도 가능
+        throw e;
+      });
   }
-  return Promise.reject(new Error(`Unknown command: ${command}`));
 }
 
-function requestOnce(reqTopic, kind, payload, { timeoutMs, qos, retain }) {
-  const store = useMqttStore.getState();
-
-  if (kind === "start" && pendingStart) 
-    return Promise.reject(new Error("startSystemCheck: already pending"));
-  if (kind === "stop"  && pendingStop )  
-    return Promise.reject(new Error("stopSystemCheck: already pending"));
-
-  const promise = new Promise((resolve, reject) => {
-    const timer = setTimeout(() => {
-      if (kind === "start") 
-        pendingStart = null;
-      if (kind === "stop")  
-        pendingStop  = null;
-      reject(new Error(`${kind}SystemCheck: response timeout (${timeoutMs}ms)`));
-    }, timeoutMs);
-
-    const slot = { resolve, reject, timer };
-    if (kind === "start") pendingStart = slot;
-    if (kind === "stop")  pendingStop  = slot;
-  });
-
-  const body = typeof payload === "string" ? payload : JSON.stringify(payload);
-  store.publish(reqTopic, body, { qos, retain });
-
-  return promise;
-}
-
-// ===== 점검 세션 =====
 export function startInspection() {
-  isInspecting = true;
-  if (!rseSubscribed) {
+  // 멱등 구독: subs 맵에 기록되어 재연결시 자동 재구독
+  try {
     useMqttStore.getState().subscribeTopics([TOPICS.rseStatus], { qos: 1 });
-    rseSubscribed = true;
+  } catch (e) {
+    console.warn("startInspection subscribe failed:", e);
   }
 }
+
 export function stopInspection() {
-  isInspecting = false;
-  if (rseSubscribed) {
+  try {
     useMqttStore.getState().unsubscribeTopics([TOPICS.rseStatus]);
-    rseSubscribed = false;
+  } catch (e) {
+    console.warn("stopInspection unsubscribe failed:", e);
   }
 }
 
@@ -213,7 +197,7 @@ export async function handleRseStatus(buf) {
   }
 
   useMetricsStore.getState().pushFromItem(item);
-  console.log("[rseStatus] upsert (registered):", item.id);
+  console.debug("[rseStatus] upsert (registered):", item.id);
 
 }
 

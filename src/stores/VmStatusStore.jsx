@@ -1,4 +1,3 @@
-// npm i zustand (이미 있으면 패스)
 import { create } from "zustand";
 
 export const useVmStatusStore = create((set, get) => ({

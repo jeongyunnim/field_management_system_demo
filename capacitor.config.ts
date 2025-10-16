@@ -7,7 +7,9 @@ const config: CapacitorConfig = {
   webDir: 'dist',
   bundledWebRuntime: false,
   server: {
-    androidScheme: 'http',   // ★ 추가
+    url: 'http://192.168.69.152:8081',
+    cleartext: true,
+    androidScheme: 'http',
   },
 };
 

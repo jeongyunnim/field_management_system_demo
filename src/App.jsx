@@ -6,15 +6,16 @@ import { initMqttBus, disposeMqttBus } from "./services/mqtt/bus";
 import Sidebar from "./components/sidebar/Sidebar.jsx";
 import Header from "./components/Header";
 
-import Home from "./pages/Home.jsx";
+import Main from "./pages/Main.jsx";
 import DeviceList from "./pages/DeviceList.jsx";
 import RegisterDevice from "./pages/RegisterDevice.jsx";
 import DeviceMonitoring from "./pages/DeviceMonitoring.jsx";
 import Settings from "./pages/Settings.jsx";
 import StationMapPanel from "./components/monitor/StationMapPanel.jsx";
+import EditDevice from "./pages/EditDevice.jsx";
 
 export default function App() {
-  const [activePage, setActivePage] = useState("Home");
+  const [activePage, setActivePage] = useState("Main");
   const [isCollapsed, setIsCollapsed] = useState(false);
   
   /** MQTT 초기화 */
@@ -29,10 +30,12 @@ export default function App() {
 
   const renderCenter = () => {
     switch (activePage) {
-      case "Home":
-        return <Home />;
+      case "Main":
+        return <Main />;
       case "DeviceList":
         return <DeviceList setActivePage={setActivePage} />;
+      case "EditDevice":
+        return <EditDevice setActivePage={setActivePage} />;
       case "RegisterDevice":
         return <RegisterDevice setActivePage={setActivePage} />;
       case "DeviceMonitoring":

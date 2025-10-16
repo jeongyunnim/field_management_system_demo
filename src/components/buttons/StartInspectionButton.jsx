@@ -25,7 +25,7 @@ export default function StartInspectionButton({
             "btn-text",
             disabled
               ? "bg-slate-600 text-white/90 cursor-not-allowed opacity-70"
-              : "bg-[#28B555] text-white",
+              : "bg-[#2B7FFF] text-white",
             "shadow-sm ring-1 ring-emerald-700/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70",
             className,
           ].join(" ")}

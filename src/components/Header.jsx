@@ -26,7 +26,6 @@ export default function Header({ activePage }) {
       return; 
     }
     try {
-      // 서버 프로토콜에 맞는 payload (필요시 수정)
       const payload = {
         VER: "1.0",
         TS: new Date().toISOString(),
@@ -84,22 +83,15 @@ export default function Header({ activePage }) {
   };
 
   return (
-    <header className="flex h-20 items-center justify-between px-10 py-3 bg-[#121d2d]">
-      {/* Breadcrumbs */}
-      <div className="flex items-center space-x-1 text-slate-400 text-lg">
-        <span>Home</span>
-        {path.map((item, index) => (
-          <span key={index} className="flex items-center space-x-2">
-            <span>&gt;</span>
-            <span className={index === path.length - 1 ? "text-gray-100 " : ""}>
-              {item}
-            </span>
-          </span>
-        ))}
+    <header className="flex h-20 items-center justify-between px-10 pt-10 bg-[#121d2d]">
+      <div className="flex items-center space-x-2 text-slate-400 text-lg">
+        <img className="w-7" src="public/icons/icon_User.png" />
+        <div className="text-lg">User: </div>
+        <div className="text-lg text-slate-100">TEST_USER1</div>
       </div>
 
       {/* Action buttons */}
-      <div className="flex items-center space-x-3 text-2xl text-slate-100">
+      <div className="flex items-center space-x-5 text-2xl text-slate-100">
         <StartInspectionButton
           onStart={handleStart}
           className="shadow-sm"
@@ -112,8 +104,10 @@ export default function Header({ activePage }) {
           disabled={!connected || !isInspecting}
           onEnded={() => setIsInspecting(false)}
         />
-        <div className="text-lg">TEST_USER1</div>
-        <button className="btn btn-text">Logout</button>
+        <button className="btn btn-text">
+          <img className="w-7" src="public/icons/Icon_Logout_Nor.png" alt="logout" />
+          <span className="pl-2">로그아웃</span>
+        </button>
       </div>
     </header>
   );

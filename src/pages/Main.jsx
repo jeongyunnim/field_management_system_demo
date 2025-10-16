@@ -1,9 +1,9 @@
-// pages/Home.jsx
+// pages/Main.jsx
 import { Card } from "../components/common/Card";
 import React from "react";
 import MainSystemStats from "../components/MainSystemStats";
 
-export default function Home() {
+export default function Main() {
   return (
     <div
       className="

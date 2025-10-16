@@ -99,7 +99,6 @@ export const useMqttStore = create((set, get) => {
       }
       subscribeAll();
     },
-
     unsubscribeTopics(topics) {
       const list = Array.isArray(topics) ? topics : [];
       for (const t of list) {
@@ -107,13 +106,14 @@ export const useMqttStore = create((set, get) => {
         if (!topic) continue;
         subs.delete(topic);
         if (client && client.connected) {
+          console.log(`UNSUB: ${topic}`);
           client.unsubscribe(topic, (err) => {
             if (err) console.error("unsubscribe error:", topic, err);
           });
         }
       }
     },
-
+    
     addMessageHandler(fn) {
       listeners.add(fn);
       return () => listeners.delete(fn);

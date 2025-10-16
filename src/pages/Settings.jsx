@@ -1,8 +1,10 @@
+import { Card } from "../components/common/Card";
+
 export default function Settings() {
   return (
-    <div className="text-slate-100">
+    <Card>
       <h1 className="text-2xl">설정</h1>
-      <p>settings page.</p>
-    </div>
+      <button className="btn">지도 권역 추가(업로드)</button>
+    </Card>
   );
 }

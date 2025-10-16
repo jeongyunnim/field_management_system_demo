@@ -12,8 +12,7 @@ export default function RegisterDevice({ setActivePage }) {
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    // ✅ 제출 시 정규화: 공백 제거(+ 필요하면 대문자 통일)
-    const serialNorm = serial.trim(); // .toUpperCase() 필요하면 추가
+    const serialNorm = serial.trim().toUpperCase();
     const modelNorm = model.trim();
 
     if (!serialNorm) {
