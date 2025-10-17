@@ -1,10 +1,10 @@
 // src/services/mqtt/bus.js
 // 요청/응답 매칭, 타임아웃, 점검 세션 라우팅, 패킷 처리
-import { isDeviceRegistered } from "../../dbms/deviceDb";
+import { isDeviceRegistered, getDeviceIdBySerial } from "../../dbms/deviceDb";
 import { useMetricsStore } from "../../stores/MetricsStore";
 import { useMqttStore } from "../../stores/MqttStore";
 import { useVmStatusStore } from "../../stores/VmStatusStore";
-import { rseToItem } from "../../utils/rseTransform";
+import { rseToItem } from "../../utils/transformRse";
 import { useRseStore } from "../../stores/RseStore";
 import { useInspectStore } from "../../stores/InspectStore";
 
@@ -174,7 +174,7 @@ function handleVmStatus(buf) {
 
 // ---------- rseStatus 처리 ----------
 export async function handleRseStatus(buf) {
-  const msg = safeJsonOrText(buf);      // 기존 로직 유지 (문자열 or JS 객체 반환 가정)
+  const msg = safeJsonOrText(buf);
   const data = typeof msg === "string" ? JSON.parse(msg) : msg;
 
   const serial = data?.serial_number;
@@ -185,12 +185,18 @@ export async function handleRseStatus(buf) {
     return ;
   }
 
-  const item = rseToItem(data); // { id: serial, ... }
+  const canonicalId = await getDeviceIdBySerial(serial);
+  if (!canonicalId) {
+    console.warn("[rseStatus] no canonical id for serial:", serial);
+    return;
+  }
+
+  const item = rseToItem(data, canonicalId); // { id: serial, ... }
 
   try {
     useRseStore.getState().upsertRseStatus(item.id, serial, data);
   } catch (e) {
-    console.warn("RseStore ingest failed:", e);
+    console.warn("RseStore upsert failed:", e);
   }
   if (typeof window !== "undefined" && typeof window.__pushRseItem === "function") {
     window.__pushRseItem(item);  // MonitoringDeviceList로 업서트

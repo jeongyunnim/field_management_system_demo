@@ -1,4 +1,4 @@
-// utils/rseTransform.js
+// utils/transformRse.js
 import { rssiToBars } from "./signal";
 
 // 건강도는 Summary 객체로만 일관
@@ -62,13 +62,13 @@ function pickCoords(m) {
   return null;
 }
 
-export function rseToItem(m) {
+export function rseToItem(m, canonicalId) {
   const serial = String(m?.serial_number ?? "");
   const rssiDbm = Number(m?.lte?.rssi_dbm);
   const bars = Number.isFinite(rssiDbm) ? rssiToBars(rssiDbm) : 0;
 
   return {
-    id: serial,
+    id: canonicalId,
     serial,
 
     active: !!(m?.ltev2x_tx_ready_status || m?.gnss_antenna_status),

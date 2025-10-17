@@ -8,11 +8,9 @@ import Header from "./components/Header";
 
 import Main from "./pages/Main.jsx";
 import DeviceList from "./pages/DeviceList.jsx";
-import RegisterDevice from "./pages/RegisterDevice.jsx";
 import DeviceMonitoring from "./pages/DeviceMonitoring.jsx";
 import Settings from "./pages/Settings.jsx";
 import StationMapPanel from "./components/monitor/StationMapPanel.jsx";
-import EditDevice from "./pages/EditDevice.jsx";
 
 export default function App() {
   const [activePage, setActivePage] = useState("Main");
@@ -34,14 +32,8 @@ export default function App() {
         return <Main />;
       case "DeviceList":
         return <DeviceList setActivePage={setActivePage} />;
-      case "EditDevice":
-        return <EditDevice setActivePage={setActivePage} />;
-      case "RegisterDevice":
-        return <RegisterDevice setActivePage={setActivePage} />;
       case "DeviceMonitoring":
         return <DeviceMonitoring setActivePage={setActivePage} />;
-      case "V2XTest":
-        return <V2XTest />;
       case "Settings":
         return <Settings />;
       default:
