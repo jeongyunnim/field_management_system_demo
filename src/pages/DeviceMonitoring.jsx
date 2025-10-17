@@ -254,7 +254,6 @@ function SummaryPanel({ selected, series, latest }) {
           );
         })()}
 
-
         {/* Health 도넛 */}
         <button 
           type="button"
@@ -272,7 +271,8 @@ function SummaryPanel({ selected, series, latest }) {
               title={`정상 ${okPct}%`}
               aria-label="current status"
               formatValue={(v) => `${v}%`}              
-            />  
+            />
+            <span className="text-[10px] w-42 h-10 text-slate-400">* 상세 정보를 보려면 클릭하세요</span>
           </div>
         </button>
         <SystemResourcePanel 

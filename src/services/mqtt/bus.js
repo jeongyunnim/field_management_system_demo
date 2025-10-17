@@ -7,7 +7,7 @@ import { useVmStatusStore } from "../../stores/VmStatusStore";
 import { rseToItem } from "../../utils/transformRse";
 import { useRseStore } from "../../stores/RseStore";
 import { useInspectStore } from "../../stores/InspectStore";
-
+import { openRseReportPrint } from "../../utils/resReport";
 
 const TOPICS = {
   startReq:  "fac/V2X_MAINTENANCE_HUB_CLIENT_PA/V2X_MAINTENANCE_HUB_PA/startSystemCheck/req",
@@ -23,6 +23,11 @@ let offHandler = null;
 
 // 토픽별 1회 응답 대기 레지스트리
 const waiters = new Map(); // topic -> { resolve }
+
+if (typeof window !== "undefined") {
+  window.__latestRseById = window.__latestRseById || {};
+  window.__getRseLatestArray = () => Object.values(window.__latestRseById || {});
+}
 
 function waitFor(topic, timeoutMs) {
   return new Promise((resolve, reject) => {
@@ -119,6 +124,7 @@ export function request(command, payload = {}, { timeoutMs = 10000, qos = 1, ret
       .then((resp) => {
         inspect.setPhase("running");
         startInspection();
+        inspect.setStartedAt(Date.now);
         return safeJsonOrText(resp);
       })
       .catch((e) => {
@@ -131,11 +137,26 @@ export function request(command, payload = {}, { timeoutMs = 10000, qos = 1, ret
     if (inspect.phase !== "running") return Promise.resolve(null);
     inspect.setPhase("stopping");
     const body = typeof payload === "string" ? payload : JSON.stringify(payload);
-    mqtt.publish(TOPICS.stopReq, body, { qos, retain }); // pub 딱 1회
+    mqtt.publish(TOPICS.stopReq, body, { qos, retain });
+    const startedAt = inspect.startedAt ?? null; 
+
     return waitFor(TOPICS.stopResp, timeoutMs)
       .then((resp) => {
         inspect.setPhase("idle");
         stopInspection();
+
+        const ok = window.confirm("보고서를 출력하시겠습니까?");
+        if (ok)
+        {
+          try {
+            const items = (typeof window !== "undefined" && window.__getRseLatestArray)
+            ? window.__getRseLatestArray()
+            : [];
+            openRseReportPrint(items, { startedAt, endedAt: Date.now() });
+          } catch (e) {
+            console.error("report print failed:", e);
+          }
+        }
         return safeJsonOrText(resp);
       })
       .catch((e) => {
@@ -146,20 +167,11 @@ export function request(command, payload = {}, { timeoutMs = 10000, qos = 1, ret
 }
 
 export function startInspection() {
-  // 멱등 구독: subs 맵에 기록되어 재연결시 자동 재구독
-  try {
-    useMqttStore.getState().subscribeTopics([TOPICS.rseStatus], { qos: 1 });
-  } catch (e) {
-    console.warn("startInspection subscribe failed:", e);
-  }
+  useMqttStore.getState().subscribeTopics([TOPICS.rseStatus], { qos: 1 });
 }
 
 export function stopInspection() {
-  try {
-    useMqttStore.getState().unsubscribeTopics([TOPICS.rseStatus]);
-  } catch (e) {
-    console.warn("stopInspection unsubscribe failed:", e);
-  }
+  useMqttStore.getState().unsubscribeTopics([TOPICS.rseStatus]);
 }
 
 // ---------- vmStatus 처리 ----------
@@ -198,13 +210,18 @@ export async function handleRseStatus(buf) {
   } catch (e) {
     console.warn("RseStore upsert failed:", e);
   }
-  if (typeof window !== "undefined" && typeof window.__pushRseItem === "function") {
-    window.__pushRseItem(item);  // MonitoringDeviceList로 업서트
+  if (typeof window !== "undefined") {
+    window.__latestRseById[item.id] = {
+      ...item,
+      __receivedAt: Date.now(),    // 앱이 받은 시각
+      __rawTs: data?.timestamp ?? data?.ts ?? null,  // 장치 원본 TS(있으면)
+    };
+    if (typeof window.__pushRseItem === "function") {
+      window.__pushRseItem(item);  // MonitoringDeviceList로 업서트
+    }
   }
-
   useMetricsStore.getState().pushFromItem(item);
   console.debug("[rseStatus] upsert (registered):", item.id);
-
 }
 
 
