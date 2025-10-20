@@ -105,7 +105,6 @@ function SummaryPanel({ selected, series, latest }) {
     );
   }
 
-  const badPct = Math.max(0, 100 - okPct);
   const snrBars = Number.isFinite(selected?.bars) ? selected.bars : 0;
 
   // TODO: 차후 데이터 시트 변경되면 실제 RSSI 값으로 변경해야 함.

@@ -8,6 +8,10 @@ import { rseToItem } from "../../utils/transformRse";
 import { useRseStore } from "../../stores/RseStore";
 import { useInspectStore } from "../../stores/InspectStore";
 import { openRseReportPrint } from "../../utils/resReport";
+import { memoryRecorder } from "../../core/MemoryRecorder";
+import { downloadCsvInBrowser, saveCsvOnAndroid } from "../../core/exporters";
+import { CSV_HEADER } from "../../adapters/packetToCsvRow";
+import { Capacitor } from "@capacitor/core";
 
 const TOPICS = {
   startReq:  "fac/V2X_MAINTENANCE_HUB_CLIENT_PA/V2X_MAINTENANCE_HUB_PA/startSystemCheck/req",
@@ -134,45 +138,82 @@ export function request(command, payload = {}, { timeoutMs = 10000, qos = 1, ret
   }
 
   if (command === "stopSystemCheck") {
-    if (inspect.phase !== "running") return Promise.resolve(null);
-    inspect.setPhase("stopping");
-    const body = typeof payload === "string" ? payload : JSON.stringify(payload);
-    mqtt.publish(TOPICS.stopReq, body, { qos, retain });
-    const startedAt = inspect.startedAt ?? null; 
+  if (inspect.phase !== "running") return Promise.resolve(null);
+  inspect.setPhase("stopping");
+  const body = typeof payload === "string" ? payload : JSON.stringify(payload);
+  mqtt.publish(TOPICS.stopReq, body, { qos, retain });
+  const startedAt = inspect.startedAt ?? null;
 
-    return waitFor(TOPICS.stopResp, timeoutMs)
-      .then((resp) => {
-        inspect.setPhase("idle");
-        stopInspection();
+  return waitFor(TOPICS.stopResp, timeoutMs)
+    .then(async (resp) => {
+      inspect.setPhase("idle");
+      stopInspection();
 
-        const ok = window.confirm("보고서를 출력하시겠습니까?");
-        if (ok)
-        {
-          try {
-            const items = (typeof window !== "undefined" && window.__getRseLatestArray)
-            ? window.__getRseLatestArray()
-            : [];
-            openRseReportPrint(items, { startedAt, endedAt: Date.now() });
-          } catch (e) {
-            console.error("report print failed:", e);
-          }
+      // 사용자에게 출력 확인
+      const wantPrint = window.confirm("보고서를 출력하시겠습니까?");
+      if (wantPrint) {
+        // stop recorder and export CSV
+        try {
+          memoryRecorder.stop();
+        } catch (e) {
+          console.warn("recorder stop failed:", e);
         }
-        return safeJsonOrText(resp);
-      })
-      .catch((e) => {
-        inspect.setPhase("running"); // 실패/타임아웃 시 다시 중단 시도 가능
-        throw e;
-      });
+
+        const header = memoryRecorder.header();
+        const rows = memoryRecorder.getRows();
+        const ts = new Date().toISOString().replace(/[:.]/g, "-");
+        const filename = `rse_report_${ts}.csv`;
+
+        // 플랫폼 확인(안드로이드일 때 native 저장 시도, 실패 시 브라우저로 폴백)
+        let savedNatively = false;
+        try {
+          const platform = (typeof Capacitor?.getPlatform === "function") ? Capacitor.getPlatform() : null;
+          const isAndroid = platform === "android";
+          if (isAndroid) {
+            // saveCsvOnAndroid 내부에서 dynamic import 처리를 하므로 빌드 오류 없음
+            savedNatively = await saveCsvOnAndroid(filename, header, rows);
+          }
+        } catch (e) {
+          console.warn("native save attempt failed:", e);
+          savedNatively = false;
+        }
+
+        // native 저장을 못했거나 네이티브 환경이 아니면 브라우저 다운로드로 폴백
+        if (!savedNatively) {
+          try {
+            downloadCsvInBrowser(filename, header, rows);
+          } catch (e) {
+            console.error("downloadCsvInBrowser failed:", e);
+            // (옵션) 사용자에게 실패 안내
+            alert("보고서 저장에 실패했습니다. 콘솔을 확인하세요.");
+          }
+        } else {
+          // (옵션) 성공 알림: 네이티브 저장 성공
+          // alert("보고서가 기기에 저장되었습니다.");
+        }
+      }
+
+      return safeJsonOrText(resp);
+    })
+    .catch((e) => {
+      inspect.setPhase("running"); // 실패/타임아웃 시 다시 중단 시도 가능
+      throw e;
+    });
   }
 }
 
 export function startInspection() {
   useMqttStore.getState().subscribeTopics([TOPICS.rseStatus], { qos: 1 });
+  // 메모리 수집 시작
+  try { memoryRecorder.start(); } catch (e) { console.warn("recorder start failed:", e); }
 }
 
 export function stopInspection() {
   useMqttStore.getState().unsubscribeTopics([TOPICS.rseStatus]);
+  // recorder는 stopSystemCheck 성공 시 stop() 호출(혹은 여기서 호출해도 무방)
+  // memoryRecorder.stop(); // (일괄 stop은 stopSystemCheck 성공 블록에서 실행)
 }
+
 
 // ---------- vmStatus 처리 ----------
 function handleVmStatus(buf) {
@@ -187,7 +228,7 @@ function handleVmStatus(buf) {
 // ---------- rseStatus 처리 ----------
 export async function handleRseStatus(buf) {
   const msg = safeJsonOrText(buf);
-  const data = typeof msg === "string" ? JSON.parse(msg) : msg;
+  const data = typeof msg === "string" ? safeJsonOrText(msg) : msg;
 
   const serial = data?.serial_number;
 
@@ -210,6 +251,14 @@ export async function handleRseStatus(buf) {
   } catch (e) {
     console.warn("RseStore upsert failed:", e);
   }
+
+  // --- 기록용: 메모리 레코더에 원본 패킷 저장 (시리얼이 유효한 경우) ---
+  try {
+    memoryRecorder.add(data, Date.now());
+  } catch (e) {
+    console.warn("memoryRecorder.add failed:", e);
+  }
+
   if (typeof window !== "undefined") {
     window.__latestRseById[item.id] = {
       ...item,
