@@ -25,6 +25,7 @@ import { extractDeviceIp, toISOWithLocalOffset, generateTransactionId } from "..
 import { getHealthPercent } from "../utils/formatUtils";
 import { calculateCertDaysLeft } from "../utils/certificateUtils";
 import { MQTT_TOPICS, HEALTH_CHECK_LABELS, TILE_STYLES, CERT_STATES } from "../constants/appConstants";
+import { readFileAsText, selectFile } from "../utils/fileUtils";
 
 /**
  * 장치 모니터링 메인 컴포넌트
@@ -180,14 +181,103 @@ function SummaryPanel({ selected, series, latest }) {
     }
   }
 
-    async function handleRebootBtn() {
+  async function handleMapDataUpdateBtn() {
+    const reqTopic = MQTT_TOPICS.MAP_UPDATE_REQ; // ⚠️ REBOOT_REQ가 아닌 MAP 전용 topic으로 변경 필요
+    const resTopic = MQTT_TOPICS.MAP_UPDATE_RES;
+    const message = "MAP 데이터를 업데이트 하시겠습니까?";
+    
+    if (!window.confirm(message)) 
+      return;
+
+    try {
+      const deviceIp = extractDeviceIp(selected.__raw);
+      if (!deviceIp) {
+        throw new Error("장치의 LTE-V2X IP를 찾을 수 없습니다.");
+      }
+
+      // 파일 선택 UI
+      const file = await selectFile({
+        description: "MAP 데이터 파일"
+      });
+
+      if (!file) return;
+
+      // 파일 내용을 텍스트로 읽기
+      const mapDataContent = await readFileAsText(file);
+      
+      if (!mapDataContent || mapDataContent.trim() === "") {
+        throw new Error("MAP 데이터 파일이 비어있습니다.");
+      }
+
+      console.log("MAP data size:", mapDataContent.length, "bytes");
+
+      const transactionId = generateTransactionId();
+      
+      const payload = {
+        header: {
+          ack: 1,
+          transactionId: transactionId,
+          ver: "1.0"
+        },
+        param: {
+          data_type: 2,
+          index: 1,
+          oid: "citsRsuV2xMsgTxTable",
+          tableList: [
+            { oid: "citsRsuV2xMsgTxChannel", value: 173, value_type: 3 },
+            { oid: "citsRsuV2xMsgTxDataRate", value: 12, value_type: 3 },
+            { oid: "citsRsuV2xMsgTxHdrChannel", value: 1, value_type: 1 },
+            { oid: "citsRsuV2xMsgTxHdrDataRate", value: 0, value_type: 1 },
+            { oid: "citsRsuV2xMsgTxHdrTxPower", value: 1, value_type: 1 },
+            { oid: "citsRsuV2xMsgTxId", value: 100, value_type: 3 },
+            { oid: "citsRsuV2xMsgTxIndex", value: 1, value_type: 1 },
+            { oid: "citsRsuV2xMsgTxInterval", value: 100, value_type: 3 },
+            { oid: "citsRsuV2xMsgTxPayload", value: mapDataContent, value_type: 5 },
+            { oid: "citsRsuV2xMsgTxPayloadSecType", value: 1, value_type: 1 },
+            { oid: "citsRsuV2xMsgTxPayloadType", value: 0, value_type: 1 },
+            { oid: "citsRsuV2xMsgTxPeer", value: "FF:FF:FF:FF:FF:FF", value_type: 5 },
+            { oid: "citsRsuV2xMsgTxPower", value: 23, value_type: 3 },
+            { oid: "citsRsuV2xMsgTxPriority", value: 1, value_type: 3 },
+            { oid: "citsRsuV2xMsgTxPsid", value: 82056, value_type: 3 },
+            { oid: "citsRsuV2xMsgTxStartTime", value: 0, value_type: 3 },
+            { oid: "citsRsuV2xMsgTxStopTime", value: 939128857, value_type: 3 },
+            { oid: "citsRsuV2xMsgTxTimeSlot", value: 0, value_type: 1 }
+          ]
+        }
+      };
+
+      await rpcDirect({
+        pktOrIp: deviceIp,
+        reqTopic, 
+        resTopic,
+        payload,
+        match: (e) => {
+          console.log("MAP Update Response:", e);
+          if (e?.header?.code === 200) {
+            alert(`[RSE Message] MAP 데이터 업데이트 성공`);
+            return true;
+          }
+          console.warn("Unexpected response code:", e?.header?.code);
+          alert(`업데이트 실패: CODE=${e?.header?.code}`);
+          return false;
+        },
+        timeoutMs: 15000, // MAP 데이터 크기에 따라 시간 증가
+        qos: 1,
+      });
+
+    } catch (error) {
+      console.error("MAP data update failed:", error);
+      alert(`전송 실패: ${error?.message || error}`);
+    }
+  }
+
+// ========== 유틸리티 함수 ==========
+
+
+  async function handleRebootBtn() {
     const reqTopic = MQTT_TOPICS.REBOOT_REQ;
     const resTopic = MQTT_TOPICS.REBOOT_RES;
     const message = "장치를 재부팅 하시겠습니까?";
-
-    console.log("=== Reboot Debug ===");
-    console.log("Request Topic:", reqTopic);
-    console.log("Response Topic:", resTopic);
 
     if (!window.confirm(message)) 
       return;
@@ -198,36 +288,26 @@ function SummaryPanel({ selected, series, latest }) {
         throw new Error("장치의 LTE-V2X IP를 찾을 수 없습니다.");
       }
 
-      console.log("Device IP:", deviceIp);
-
       const payload = {
         VER: "1.0",
         TRANSACTION_ID: generateTransactionId(),
         REASON: "Maintenance reboot",
       };
 
-      console.log("Payload:", payload);
-
-      // rpcDirect 대신 직접 rpcJson 호출 시도
-      const session = await getDirectSession(deviceIp);
-      await session.rpcJson({
+      await rpcDirect({
+        pktOrIp: deviceIp,
         reqTopic, 
         resTopic,
         payload,
         match: (e) => {
-          console.log("=== Match function called ===");
-          console.log("Response received:", e);
-          
+          console.log("Response:", e);
           if (e?.CODE === 200) {
             alert(`[RSE Message] ${e?.MSG || '재부팅 성공'}`);
             return true;
           }
-          
-          console.warn("Match failed - CODE:", e?.CODE);
-          alert(`재부팅 실패: ${e?.MSG || 'Unknown error'}`);
+          console.warn("Unexpected response code:", e?.CODE);
           return false;
         },
-        timeoutMs: 10000, // timeout 늘리기
         qos: 1,
       });
 
@@ -267,7 +347,7 @@ function SummaryPanel({ selected, series, latest }) {
 
         {/* 액션 버튼들 */}
         <div className="flex justify-between col-span-12 space-x-2">
-          <button className="w-40 flex-auto device-inspection-icon-btn justify-center bg-cyan-900/90">
+          <button onClick={handleMapDataUpdateBtn} className="w-40 flex-auto device-inspection-icon-btn justify-center bg-cyan-900/90">
             <span>MAP Data 업데이트</span>
           </button>
           <button className="w-40 flex-auto device-inspection-icon-btn justify-center bg-cyan-900/90">

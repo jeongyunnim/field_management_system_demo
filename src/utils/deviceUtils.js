@@ -49,12 +49,20 @@ export function toISOWithLocalOffset(date = new Date()) {
   return date.toISOString().replace("Z", `${sign}${hours}:${minutes}`);
 }
 
+let transactionCounter = 0;
+
 /**
  * 트랜잭션 ID 생성 (타임스탬프 + 랜덤)
  * @returns {number} 유니크한 트랜잭션 ID
  */
 export function generateTransactionId() {
-  return Math.floor(Date.now() % 1e9 + Math.random() * 1e6);
+  transactionCounter = (transactionCounter + 1) % 65536;
+  return transactionCounter;
+}
+
+// 필요시 카운터 초기화
+export function resetTransactionId() {
+  transactionCounter = 0;
 }
 
 /**

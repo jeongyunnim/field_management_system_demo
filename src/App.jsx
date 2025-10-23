@@ -1,11 +1,12 @@
 // src/App.jsx
 import { useState, useEffect } from "react";
-// import mqtt from "mqtt"; // 스토어 내부에서 관리
 import { useMqttStore } from "./stores/MqttStore";
+import { useAuthStore } from "./stores/AuthStore";
 import { initMqttBus, disposeMqttBus } from "./services/mqtt/bus";
 import Sidebar from "./components/sidebar/Sidebar.jsx";
 import Header from "./components/Header";
 
+import Login from "./pages/Login.jsx";
 import Main from "./pages/Main.jsx";
 import DeviceList from "./pages/DeviceList.jsx";
 import DeviceMonitoring from "./pages/DeviceMonitoring.jsx";
@@ -16,15 +17,29 @@ export default function App() {
   const [activePage, setActivePage] = useState("Main");
   const [isCollapsed, setIsCollapsed] = useState(false);
   
+  // 인증 상태
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+  
   /** MQTT 초기화 */
   const connect = useMqttStore((s) => s.connect);
   const disconnect = useMqttStore((s) => s.disconnect);
 
   useEffect(() => {
-    connect();                     // MqttStore 연결
-    const off = initMqttBus();     // 버스 초기화
-    return () => { off?.(); disconnect(); };
-  }, []);
+    // 로그인된 경우에만 MQTT 연결
+    if (isAuthenticated) {
+      connect();                     // MqttStore 연결
+      const off = initMqttBus();     // 버스 초기화
+      return () => { 
+        off?.(); 
+        disconnect(); 
+      };
+    }
+  }, [isAuthenticated, connect, disconnect]);
+
+  // 로그인되지 않은 경우 로그인 화면 표시
+  if (!isAuthenticated) {
+    return <Login />;
+  }
 
   const renderCenter = () => {
     switch (activePage) {

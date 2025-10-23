@@ -1,5 +1,6 @@
 // src/components/Header.jsx
 import { useMqttStore } from "../stores/MqttStore";
+import { useAuthStore } from "../stores/AuthStore";
 import { useInspectStore } from "../stores/InspectStore";
 import StartInspectionButton from "./buttons/StartInspectionButton";
 import StopInspectionButton from "./buttons/StopInspectionButton";
@@ -11,12 +12,15 @@ const STOP_SYSTEM_CHECK_ID = 123456790;
 export default function Header({ activePage }) {
   const connected = useMqttStore((s) => s.connected);
   const phase = useInspectStore((s) => s.phase);
-  const inspecting = phase === "running";
+  
+  // 인증 상태
+  const currentUser = useAuthStore((s) => s.currentUser);
+  const logout = useAuthStore((s) => s.logout);
 
   const pageMap = {
     Main: ["Main"],
     DeviceList: ["장치 관리"],
-    WirelessDevices: ["장치 모니터링"],
+    DeviceMonitoring: ["장치 모니터링"],
     Settings: ["설정"],
   };
   const path = pageMap[activePage] || [activePage];
@@ -42,7 +46,6 @@ export default function Header({ activePage }) {
         return;
       }
       console.log("✅ 점검 시작:", msg);
-      // 주의: request() 내에서 startInspection() 처리됨
     } catch (e) {
       console.error("startSystemCheck 실패:", e);
       alert(`점검 시작 실패: ${e.message || e}`);
@@ -66,10 +69,15 @@ export default function Header({ activePage }) {
         return;
       }
       console.log("🛑 점검 종료:", msg);
-      // 주의: request() 내에서 stopInspection() 처리됨
     } catch (e) {
       console.error("stopSystemCheck 실패:", e);
       alert(`점검 중단 실패: ${e.message || e}`);
+    }
+  };
+
+  const handleLogout = () => {
+    if (window.confirm("로그아웃 하시겠습니까?")) {
+      logout();
     }
   };
 
@@ -78,7 +86,7 @@ export default function Header({ activePage }) {
       <div className="flex items-center space-x-2 text-slate-400 text-lg">
         <img className="w-7" src="public/icons/icon_User.png" alt="user" />
         <div className="text-lg">User: </div>
-        <div className="text-lg text-slate-100">TEST_USER1</div>
+        <div className="text-lg text-slate-100">{currentUser || "Admin"}</div>
       </div>
 
       {/* Action buttons */}
@@ -93,7 +101,10 @@ export default function Header({ activePage }) {
           className="shadow-sm"
           disabled={!connected || phase !== "running"}
         />
-        <button className="btn btn-text">
+        <button 
+          className="btn btn-text hover:bg-slate-700/50 transition-colors"
+          onClick={handleLogout}
+        >
           <img className="w-7" src="public/icons/Icon_Logout_Nor.png" alt="logout" />
           <span className="pl-2">로그아웃</span>
         </button>

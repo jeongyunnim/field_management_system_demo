@@ -12,6 +12,9 @@ export const MQTT_TOPICS = {
 
   REBOOT_REQ: "fac/V2X_MAINTENANCE_HUB_CLIENT_PA/SYS_CTRL_PA/systemRestart/req",
   REBOOT_RES: "fac/SYS_CTRL_PA/V2X_MAINTENANCE_HUB_CLIENT_PA/systemRestart/resp",
+
+  MAP_UPDATE_REQ: "fac/V2X_MAINTENANCE_HUB_CLIENT_PA/SNMP_PA/snmpSet/req/citsRsuV2xMsgTxTable",
+  MAP_UPDATE_RES: "fac/SNMP_PA/V2X_MAINTENANCE_HUB_CLIENT_PA/snmpSet/resp/citsRsuV2xMsgTxTable",
 };
 
 // 타임아웃 설정 (ms)

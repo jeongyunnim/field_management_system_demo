@@ -1,8 +1,9 @@
 import { X, ShieldCheck } from "lucide-react";
 import { rpcDirect } from "../../services/mqtt/directPool";
 import { epochSecToDateAuto } from "../../utils/epochSecToDateAuto";
-import { arrayBufferToBase64, generateTransactionId } from "../../utils/deviceUtils";
+import { arrayBufferToBase64, extractDeviceIp, generateTransactionId } from "../../utils/deviceUtils";
 import { MQTT_TOPICS, TIMEOUTS } from "../../constants/appConstants";
+import { readFileAsArrayBuffer, selectFile } from "../../utils/fileUtils";
 
 /**
  * 인증서 번들 ZIP 파일 전송
@@ -64,51 +65,42 @@ export default function CertificateModal({
   /**
    * 인증서 업로드 핸들러
    */
-  async function handleUploadClick() {
+  async function handleCertificateUploadBtn() {
     try {
-      if (!pktOrIp) {
-        alert("업로드 대상 정보가 없습니다.");
-        return;
+      const deviceIp = extractDeviceIp(pktOrIp);
+      if (!deviceIp) {
+        throw new Error("장치의 LTE-V2X IP를 찾을 수 없습니다.");
       }
 
-      const input = document.createElement("input");
-      input.type = "file";
-      input.accept = ".zip";
+      // 파일 선택
+      const file = await selectFile({
+        accept: ".zip",
+        description: "인증서 번들"
+      });
+
+      if (!file) return;
+
+      // 파일을 Base64로 변환
+      const arrayBuffer = await readFileAsArrayBuffer(file);
+      const base64 = arrayBufferToBase64(arrayBuffer);
+      const transactionId = generateTransactionId();
+
+      console.log("Certificate file:", file.name, "size:", file.size);
+
+      // 인증서 업로드
+      const response = await uploadCertificateBundle(deviceIp, base64, transactionId);
+
+      console.log("Certificate Upload Response:", response);
       
-      input.onchange = async (event) => {
-        try {
-          const file = event.target.files?.[0];
-          if (!file) return;
+      if (response?.CODE === 200) {
+        alert(`인증서 업로드 성공\nTRANSACTION_ID=${response?.TRANSACTION_ID}`);
+      } else {
+        alert(`업로드 실패\nCODE=${response?.CODE}, MSG=${response?.MSG || 'Unknown error'}`);
+      }
 
-          // 파일을 Base64로 변환
-          const arrayBuffer = await file.arrayBuffer();
-          const base64 = arrayBufferToBase64(arrayBuffer);
-          const transactionId = generateTransactionId();
-
-          // 인증서 업로드
-          const response = await uploadCertificateBundle(pktOrIp, base64, transactionId);
-
-          console.log("[Certificate Upload Response]", response);
-          alert(
-            `응답 CODE=${response?.CODE}, TX=${response?.TRANSACTION_ID}\n전송 성공`
-          );
-        } catch (error) {
-          console.error("Certificate upload error:", error);
-          alert(`업로드 실패: ${error?.message || error}`);
-        } finally {
-          // 같은 파일 재선택 허용
-          if (event?.target) {
-            try {
-              event.target.value = "";
-            } catch {}
-          }
-        }
-      };
-
-      input.click();
     } catch (error) {
-      console.error("Upload preparation error:", error);
-      alert(`업로드 준비 실패: ${error?.message || error}`);
+      console.error("Certificate upload error:", error);
+      alert(`업로드 실패: ${error?.message || error}`);
     }
   }
 
@@ -160,7 +152,7 @@ export default function CertificateModal({
           {/* 푸터 */}
           <div className="px-4 py-3 border-t border-white/10 flex justify-end gap-2">
             <button
-              onClick={handleUploadClick}
+              onClick={handleCertificateUploadBtn}
               className="px-3 py-1.5 rounded bg-slate-700 text-slate-100 hover:bg-slate-600 transition-colors"
             >
               갱신 (업로드)
