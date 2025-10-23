@@ -1,5 +1,4 @@
 // src/services/mqtt/bus.js
-// 요청/응답 매칭, 타임아웃, 점검 세션 라우팅, 패킷 처리
 import { isDeviceRegistered, getDeviceIdBySerial } from "../../dbms/deviceDb";
 import { useMetricsStore } from "../../stores/MetricsStore";
 import { useMqttStore } from "../../stores/MqttStore";
@@ -7,10 +6,9 @@ import { useVmStatusStore } from "../../stores/VmStatusStore";
 import { rseToItem } from "../../utils/transformRse";
 import { useRseStore } from "../../stores/RseStore";
 import { useInspectStore } from "../../stores/InspectStore";
-import { openRseReportPrint } from "../../utils/resReport";
 import { memoryRecorder } from "../../core/MemoryRecorder";
 import { downloadCsvInBrowser, saveCsvOnAndroid } from "../../core/exporters";
-import { CSV_HEADER } from "../../adapters/packetToCsvRow";
+import { logEvent } from "../../core/logger";
 import { Capacitor } from "@capacitor/core";
 
 const TOPICS = {
@@ -24,23 +22,30 @@ const TOPICS = {
 
 let initialized = false;
 let offHandler = null;
-
-// 토픽별 1회 응답 대기 레지스트리
-const waiters = new Map(); // topic -> { resolve }
+const waiters = new Map();
 
 if (typeof window !== "undefined") {
   window.__latestRseById = window.__latestRseById || {};
   window.__getRseLatestArray = () => Object.values(window.__latestRseById || {});
 }
 
+// ========================================
+// Promise/Wait 유틸리티
+// ========================================
+
 function waitFor(topic, timeoutMs) {
   return new Promise((resolve, reject) => {
-    // 타임아웃 설정
     const timer = setTimeout(() => {
       waiters.delete(topic);
+      logEvent({
+        level: "ERROR",
+        source: "BUS",
+        event: "REQ_TIMEOUT",
+        message: `Timeout waiting: ${topic}`,
+      });
       reject(new Error(`Timeout waiting: ${topic}`));
     }, timeoutMs);
-    // 등록 (resolve되면 타이머 정리)
+    
     waiters.set(topic, {
       resolve: (payload) => {
         clearTimeout(timer);
@@ -55,47 +60,53 @@ function resolveWait(topic, payload) {
   const w = waiters.get(topic);
   if (w) w.resolve(payload);
 }
-// ---------- 라우팅 테이블 ----------
+
+// ========================================
+// 메시지 라우팅
+// ========================================
+
 const ROUTES = [
   {
-    // startSystemCheck 응답
     match: (t) => t === TOPICS.startResp,
     handle: (_t, payload) => resolveWait(TOPICS.startResp, payload),
   },
   {
-    // stopSystemCheck 응답
     match: (t) => t === TOPICS.stopResp,
     handle: (_t, payload) => resolveWait(TOPICS.stopResp, payload),
   },
   {
-    // 점검 중 상태 메시지 (세션 중에만 처리)
     match: (t) => t === TOPICS.vmStatus,
     handle: (_t, payload) => handleVmStatus(payload),
   },
   {
-    // RSE 스냅샷
     match: (t) => t === TOPICS.rseStatus,
     handle: (_t, payload) => handleRseStatus(payload),
   },
-  // 필요한 라우트는 아래에 계속 추가…
 ];
 
-// ---------- 초기화/정리 ----------
+// ========================================
+// MQTT 버스 초기화/해제
+// ========================================
+
 export function initMqttBus() {
   if (initialized) return disposeMqttBus;
   const store = useMqttStore.getState();
 
   store.subscribeTopics([TOPICS.startResp, TOPICS.stopResp, TOPICS.vmStatus], { qos: 1 });
-
-  // 공용 메시지 핸들러(= 라우터)
-  offHandler = store.addMessageHandler((topic, payload /*, packet */) => {
+  logEvent({ 
+    level: "INFO", 
+    source: "MQTT", 
+    event: "SUBSCRIBE", 
+    message: `BUS topics subscribe [start inspect Response, stop inspect Response, vm status]`, 
+  });
+  
+  offHandler = store.addMessageHandler((topic, payload) => {
     for (const r of ROUTES) {
       if (r.match(topic)) {
         r.handle(topic, payload);
-        return; // 첫 매칭 처리 후 종료
+        return;
       }
     }
-    // 매칭 안되면 무시
   });
 
   initialized = true;
@@ -104,181 +115,264 @@ export function initMqttBus() {
 
 export function disposeMqttBus() {
   if (!initialized) return;
-  offHandler?.(); offHandler = null;
-
+  offHandler?.(); 
+  offHandler = null;
   try {
-    useMqttStore.getState().unsubscribeTopics([
-      TOPICS.startResp, TOPICS.stopResp, TOPICS.vmStatus, TOPICS.rseStatus,
-    ]);
-  } catch {}
+    useMqttStore.getState().unsubscribeTopics([TOPICS.startResp, TOPICS.stopResp, TOPICS.vmStatus, TOPICS.rseStatus]);
+    logEvent({ level: "INFO", source: "MQTT", event: "UNSUBSCRIBE", message: "All topic unsubscribed" });
+  } catch (e) {
+    logEvent({ level: "WARN", source: "MQTT", event: "UNSUBSCRIBE_FAIL", message: "unsubscribe failed", details: { error: String(e) } });
+  }
   initialized = false;
 }
 
-// ---------- 요청/응답 ----------
+// ========================================
+// 검사 제어 명령 (start/stop)
+// ========================================
+
 export function request(command, payload = {}, { timeoutMs = 10000, qos = 1, retain = false } = {}) {
   const mqtt = useMqttStore.getState();
   const inspect = useInspectStore.getState();
 
   if (command === "startSystemCheck") {
-    if (inspect.phase !== "idle") return Promise.resolve(null); // 버튼 비활성 상태에서 보호
-    inspect.setPhase("requesting");
-    const body = typeof payload === "string" ? payload : JSON.stringify(payload);
-    mqtt.publish(TOPICS.startReq, body, { qos, retain }); // pub 딱 1회
-    return waitFor(TOPICS.startResp, timeoutMs)
-      .then((resp) => {
-        inspect.setPhase("running");
-        startInspection();
-        inspect.setStartedAt(Date.now);
-        return safeJsonOrText(resp);
-      })
-      .catch((e) => {
-        inspect.setPhase("idle"); // 실패/타임아웃 시 버튼 복구
-        throw e;
-      });
+    return handleStartSystemCheck(mqtt, inspect, payload, { timeoutMs, qos, retain });
   }
 
   if (command === "stopSystemCheck") {
-  if (inspect.phase !== "running") return Promise.resolve(null);
-  inspect.setPhase("stopping");
-  const body = typeof payload === "string" ? payload : JSON.stringify(payload);
-  mqtt.publish(TOPICS.stopReq, body, { qos, retain });
-  const startedAt = inspect.startedAt ?? null;
-
-  return waitFor(TOPICS.stopResp, timeoutMs)
-    .then(async (resp) => {
-      inspect.setPhase("idle");
-      stopInspection();
-
-      // 사용자에게 출력 확인
-      const wantPrint = window.confirm("보고서를 출력하시겠습니까?");
-      if (wantPrint) {
-        // stop recorder and export CSV
-        try {
-          memoryRecorder.stop();
-        } catch (e) {
-          console.warn("recorder stop failed:", e);
-        }
-
-        const header = memoryRecorder.header();
-        const rows = memoryRecorder.getRows();
-        const ts = new Date().toISOString().replace(/[:.]/g, "-");
-        const filename = `rse_report_${ts}.csv`;
-
-        // 플랫폼 확인(안드로이드일 때 native 저장 시도, 실패 시 브라우저로 폴백)
-        let savedNatively = false;
-        try {
-          const platform = (typeof Capacitor?.getPlatform === "function") ? Capacitor.getPlatform() : null;
-          const isAndroid = platform === "android";
-          if (isAndroid) {
-            // saveCsvOnAndroid 내부에서 dynamic import 처리를 하므로 빌드 오류 없음
-            savedNatively = await saveCsvOnAndroid(filename, header, rows);
-          }
-        } catch (e) {
-          console.warn("native save attempt failed:", e);
-          savedNatively = false;
-        }
-
-        // native 저장을 못했거나 네이티브 환경이 아니면 브라우저 다운로드로 폴백
-        if (!savedNatively) {
-          try {
-            downloadCsvInBrowser(filename, header, rows);
-          } catch (e) {
-            console.error("downloadCsvInBrowser failed:", e);
-            // (옵션) 사용자에게 실패 안내
-            alert("보고서 저장에 실패했습니다. 콘솔을 확인하세요.");
-          }
-        } else {
-          // (옵션) 성공 알림: 네이티브 저장 성공
-          // alert("보고서가 기기에 저장되었습니다.");
-        }
-      }
-
-      return safeJsonOrText(resp);
-    })
-    .catch((e) => {
-      inspect.setPhase("running"); // 실패/타임아웃 시 다시 중단 시도 가능
-      throw e;
-    });
+    return handleStopSystemCheck(mqtt, inspect, payload, { timeoutMs, qos, retain });
   }
 }
 
+function handleStartSystemCheck(mqtt, inspect, payload, { timeoutMs, qos, retain }) {
+  if (inspect.phase !== "idle") return Promise.resolve(null);
+  
+  inspect.setPhase("requesting");
+  const body = typeof payload === "string" ? payload : JSON.stringify(payload);
+  mqtt.publish(TOPICS.startReq, body, { qos, retain });
+  logEvent({ level: "INFO", source: "BUS", entity: "FMS", event: "START_REQ", message: "startSystemCheck requested" });
+
+  return waitFor(TOPICS.startResp, timeoutMs)
+    .then((resp) => {
+      logEvent({ level: "INFO", source: "BUS", entity: "FMS", event: "START_ACK", message: "startSystemCheck ack", details: { resp: safeJsonOrText(resp) } });
+      inspect.setPhase("running");
+      startInspection();
+      inspect.setStartedAt(Date.now);
+      return safeJsonOrText(resp);
+    })
+    .catch((e) => {
+      logEvent({ level: "ERROR", source: "BUS", entity: "FMS", event: "START_FAIL", message: "startSystemCheck failed", details: { resp: String(e) } });
+      inspect.setPhase("idle");
+      throw e;
+    });
+}
+
+function handleStopSystemCheck(mqtt, inspect, payload, { timeoutMs, qos, retain }) {
+  if (inspect.phase !== "running") return Promise.resolve(null);
+  
+  inspect.setPhase("stopping");
+  const body = typeof payload === "string" ? payload : JSON.stringify(payload);
+  mqtt.publish(TOPICS.stopReq, body, { qos, retain });
+  
+  logEvent({ level: "INFO", source: "BUS", entity: "FMS", event: "STOP_REQ", message: "stopSystemCheck requested" });
+  
+  return waitFor(TOPICS.stopResp, timeoutMs)
+    .then(async (resp) => {
+      logEvent({ level: "INFO", source: "BUS", entity: "FMS", event: "STOP_ACK", message: "stopSystemCheck ack", details: { resp: safeJsonOrText(resp) } });
+      inspect.setPhase("idle");
+      stopInspection();
+
+      await handleReportGeneration();
+      
+      return safeJsonOrText(resp);
+    })
+    .catch((e) => {
+      logEvent({ level: "ERROR", source: "BUS", entity: "FMS", event: "STOP_TIMEOUT", message: "stopSystemCheck timeout" });
+      inspect.setPhase("running");
+      throw e;
+    });
+}
+
+async function handleReportGeneration() {
+  const wantPrint = window.confirm("보고서를 출력하시겠습니까?");
+  if (!wantPrint) return;
+
+  try {
+    memoryRecorder.stop();
+  } catch (e) {
+    console.warn("recorder stop failed:", e);
+  }
+
+  const header = memoryRecorder.header();
+  const rows = memoryRecorder.getRows();
+  const ts = new Date().toISOString().replace(/[:.]/g, "-");
+  const filename = `rse_report_${ts}.csv`;
+
+  let savedNatively = false;
+  try {
+    const platform = (typeof Capacitor?.getPlatform === "function") ? Capacitor.getPlatform() : null;
+    const isAndroid = platform === "android";
+    if (isAndroid) {
+      savedNatively = await saveCsvOnAndroid(filename, header, rows);
+    }
+  } catch (e) {
+    console.warn("native save attempt failed:", e);
+    savedNatively = false;
+  }
+
+  if (!savedNatively) {
+    try {
+      downloadCsvInBrowser(filename, header, rows);
+    } catch (e) {
+      console.error("downloadCsvInBrowser failed:", e);
+      alert("보고서 저장에 실패했습니다. 콘솔을 확인하세요.");
+    }
+  }
+}
+
+// ========================================
+// 검사 시작/중지
+// ========================================
+
 export function startInspection() {
   useMqttStore.getState().subscribeTopics([TOPICS.rseStatus], { qos: 1 });
-  // 메모리 수집 시작
   try { memoryRecorder.start(); } catch (e) { console.warn("recorder start failed:", e); }
 }
 
 export function stopInspection() {
   useMqttStore.getState().unsubscribeTopics([TOPICS.rseStatus]);
-  // recorder는 stopSystemCheck 성공 시 stop() 호출(혹은 여기서 호출해도 무방)
-  // memoryRecorder.stop(); // (일괄 stop은 stopSystemCheck 성공 블록에서 실행)
 }
 
+// ========================================
+// VM 상태 처리
+// ========================================
 
-// ---------- vmStatus 처리 ----------
 function handleVmStatus(buf) {
   const msg = safeJsonOrText(buf);
   try {
     useVmStatusStore.getState().setFromVmStatus(msg);
   } catch (e) {
+    logEvent({ level: "ERROR", source: "FMS", entity: "FMS", event: "VM_STATUS_PARSE_FAIL", message: "vmStatus parse failed" });
     console.warn("vmStatus parse failed:", e);
   }
 }
 
-// ---------- rseStatus 처리 ----------
+// ========================================
+// RSE 상태 처리 (등록/미등록 분기)
+// ========================================
+
+/**
+ * RSE 상태 메시지 처리 (등록/미등록 분기)
+ */
 export async function handleRseStatus(buf) {
   const msg = safeJsonOrText(buf);
-  const data = typeof msg === "string" ? safeJsonOrText(msg) : msg;
-
+  const data = typeof msg === "string" ? JSON.parse(msg) : msg;
+  
   const serial = data?.serial_number;
-
-  if (!(await isDeviceRegistered(serial))) 
-  {
-    console.debug("[rseStatus] ignored (unregistered):", serial);
-    return ;
+  if (!serial) {
+    console.warn("[rseStatus] missing serial_number");
+    return;
   }
 
+  const isRegistered = await isDeviceRegistered(serial);
+  
+  if (!isRegistered) {
+    handleUnregisteredDevice(serial, data);
+    return;
+  }
+
+  await handleRegisteredDevice(data, serial);
+}
+
+/**
+ * 미확인 장치 처리 (통계용으로 저장하지만 리스트에는 표시 안 함)
+ */
+function handleUnregisteredDevice(serial, data) {
+  const unregisteredId = `unregistered_${serial}`;
+  
+  try {
+    // 통계 목적으로만 저장 (MonitoringDeviceList에서는 필터링됨)
+    useRseStore.getState().upsertUnregisteredDevice(unregisteredId, serial, data);
+    
+    logEvent({ 
+      level: "WARN", 
+      source: "RSE", 
+      entity: serial, 
+      event: "UNREGISTERED_DEVICE", 
+      message: `Unregistered device detected: ${serial}` 
+    });
+    
+    console.debug(`[rseStatus] Unregistered device detected (stats only): ${serial}`);
+  } catch (e) {
+    console.warn("Failed to track unregistered device:", e);
+  }
+}
+
+/**
+ * 등록된 장치 처리 (전체 파싱 및 상태 업데이트)
+ */
+async function handleRegisteredDevice(data, serial) {
   const canonicalId = await getDeviceIdBySerial(serial);
+  
   if (!canonicalId) {
+    logEvent({ 
+      level: "WARN", 
+      source: "RSE", 
+      entity: serial, 
+      event: "NO_CANONICAL_ID", 
+      message: "canonical id not found" 
+    });
     console.warn("[rseStatus] no canonical id for serial:", serial);
     return;
   }
 
-  const item = rseToItem(data, canonicalId); // { id: serial, ... }
+  const item = rseToItem(data, canonicalId);
 
+  updateRseStore(item, serial, data);
+  recordMemory(data);
+  updateMetrics(item);
+
+  console.debug(`[rseStatus] Registered device updated: ${item.id}`);
+}
+
+function updateRseStore(item, serial, data) {
   try {
     useRseStore.getState().upsertRseStatus(item.id, serial, data);
   } catch (e) {
-    console.warn("RseStore upsert failed:", e);
+      logEvent({ 
+      level: "INFO", 
+      source: "RSE", 
+      entity: item.id, 
+      event: "RSE_STATUS_UPSERT", 
+      message: `RseStore upsert failed: e`
+    });
   }
+}
 
-  // --- 기록용: 메모리 레코더에 원본 패킷 저장 (시리얼이 유효한 경우) ---
+function recordMemory(data) {
   try {
     memoryRecorder.add(data, Date.now());
   } catch (e) {
     console.warn("memoryRecorder.add failed:", e);
   }
-
-  if (typeof window !== "undefined") {
-    window.__latestRseById[item.id] = {
-      ...item,
-      __receivedAt: Date.now(),    // 앱이 받은 시각
-      __rawTs: data?.timestamp ?? data?.ts ?? null,  // 장치 원본 TS(있으면)
-    };
-    if (typeof window.__pushRseItem === "function") {
-      window.__pushRseItem(item);  // MonitoringDeviceList로 업서트
-    }
-  }
-  useMetricsStore.getState().pushFromItem(item);
-  console.debug("[rseStatus] upsert (registered):", item.id);
 }
 
+function updateMetrics(item) {
+  try {
+    useMetricsStore.getState().pushFromItem(item);
+  } catch (e) {
+    console.warn("MetricsStore update failed:", e);
+  }
+}
 
-// ---------- 유틸 ----------
+// ========================================
+// 유틸리티
+// ========================================
+
 function safeJsonOrText(buf) {
   const text = safeDecode(buf);
   try { return JSON.parse(text); } catch { return text; }
 }
+
 function safeDecode(buf) {
   try { return new TextDecoder().decode(buf); } catch { return ""; }
 }

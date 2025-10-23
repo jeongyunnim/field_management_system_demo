@@ -11,15 +11,6 @@ export default function Sidebar({ activePage, setActivePage}) {
       className={`h-full grid justify-between bg-slate-700 text-slate-100 transition-all duration-300`}
     >
       <div className="relative border-b border-slate-600/40 divide-y-4 ">
-        {/* <button
-          type="button"
-          onClick={() => setIsCollapsed(!isCollapsed)}
-          className="absolute inset-y-0 right-0 inline-flex items-center justify-center"
-          aria-label={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
-        >
-          <div className="pl-4">{isCollapsed ? <ChevronRight size={36} /> : <ChevronLeft size={36} />}</div>
-        </button> */}
-
         <div className="h-full flex items-center justify-center px-4">
           <img
             src="/logo_white.png"

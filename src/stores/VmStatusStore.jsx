@@ -3,9 +3,6 @@ import { create } from "zustand";
 export const useVmStatusStore = create((set, get) => ({
   // 원본을 그대로 보관(검증/디버깅 쉬움)
   raw: null,
-
-  // 파생값(가공 결과)을 메모이제이션 없이 즉석 계산해도 되지만,
-  // 사용처가 많으면 아래처럼 set 시에 미리 만들어둬도 됨.
   parsed: {
     v2xReady: null,
     freqMHz: undefined,
@@ -74,11 +71,5 @@ function toKmh(speed) {
 function toFixLabel(mode, status) {
   // 관례: status 2 = fix, mode 3 = 3D
 	const modes = ["No Fix", "Fixing", "2D Fix", "3D Fix"];
-
-  // if (status === 0 && mode === 3) return "3D Fix";
-  // if (status === 0 && mode === 2) return "2D Fix";
-  // if (status === 1) return "No Fix";
-  // if (status === 2) return "Fixing";
 	return modes[mode];
-  // return `${mode ?? "?"}/${status ?? "?"}`;
 }

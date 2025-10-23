@@ -1,5 +1,6 @@
 // src/adapters/packetToCsvRow.js
-import { toIso, epochSecToDateAuto, fromUtcPartsMs, N, B } from "../utils/csvHelpers";
+import { toIso, fromUtcPartsMs, N, B } from "../utils/csvHelpers";
+import { epochSecToDateAuto } from "../utils/epochSecToDateAuto";
 
 export const CSV_HEADER = [
   "serial","recv_at","device_ts","hw_version","os_version","fw_version",

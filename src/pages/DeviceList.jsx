@@ -6,7 +6,7 @@ import { ZoomIn, Trash2 as Trash, RefreshCcw as Sync, Pencil } from "lucide-reac
 import RegisterDeviceModal from "../components/devices/RegisterDeviceModal";
 import EditDeviceModal from "../components/devices/EditDeviceModal";
 
-export default function DeviceList({ setActivePage, embed = false }) {
+export default function DeviceList() {
   const [loading, setLoading] = useState(false);
   const [devices, setDevices] = useState([]);
   const [selected, setSelected] = useState(() => new Set());
@@ -98,7 +98,7 @@ export default function DeviceList({ setActivePage, embed = false }) {
           </div>
         </div>
 
-        <div className="relative rounded-xl ring-1 ring-white/10 overflow-hidden bg-[#0f172a]">
+        <div className="relative rounded-xl ring-1 ring-white/10 overflow-y-auto min-h-[37rem] max-h-[37rem] bg-[#0f172a]">
           <table className="w-full border-collapse">
             <thead className="bg-[#1a273a] text-slate-200">
               <tr className="text-left">

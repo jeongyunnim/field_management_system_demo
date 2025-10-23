@@ -1,30 +1,45 @@
 // src/components/MonitoringDeviceList.jsx
-import { useEffect, useState, useCallback } from "react";
-import Donut, { healthColorForPct } from "../common/Donut";
+import { useMemo } from "react";
+import Donut from "../common/Donut";
 import Led from "../common/Led";
 import SignalBars from "../common/SignalBars";
 import { Card } from "../common/Card";
 import { useInspectStore } from "../../stores/InspectStore";
+import { useRseStore } from "../../stores/RseStore";
 
 export default function MonitoringDeviceList({ onSelect, selectedId, className = "" }) {
-  const [items, setItems] = useState([]);
   const phase = useInspectStore((s) => s.phase);
   const inspecting = phase === "running";
 
-  const upsertItem = useCallback((next) => {
-    setItems((prev) => {
-      const i = prev.findIndex((p) => p.id === next.id);
-      if (i < 0) return [next, ...prev];
-      const copy = prev.slice();
-      copy[i] = { ...copy[i], ...next };
-      return copy;
-    });
-  }, []);
+  const byId = useRseStore((s) => s.byId);               // ✅ 원시 참조
+  const warningById = useRseStore((s) => s.warningById); // ✅ 원시 참조
 
-  useEffect(() => {
-    window.__pushRseItem = upsertItem;
-    return () => { if (window.__pushRseItem === upsertItem) delete window.__pushRseItem; };
-  }, [upsertItem]);
+  const items = useMemo(() => {
+    const arr = Object.values(byId);
+
+    // 🚫 미확인 기기 제외 (id가 'unregistered_'로 시작하는 것 필터링)
+    const registered = arr.filter(item => {
+      const id = String(item.id || '');
+      return !id.startsWith('unregistered_');
+    });
+
+    const natcmp = (a, b) =>
+      String(a ?? "").localeCompare(String(b ?? ""), undefined, {
+        numeric: true,
+        sensitivity: "base",
+      });
+    return registered
+      .slice()
+      .sort((a, b) => {
+        const aActive = !!a.active;
+        const bActive = !!b.active;
+        if (aActive !== bActive) return aActive ? -1 : 1;
+
+        const as = a.serial ?? a.id ?? "";
+        const bs = b.serial ?? b.id ?? "";
+        return natcmp(as, bs);
+      });
+  }, [byId, warningById]);
 
   // 안내/스캔/목록 간단 분기
   if (!inspecting) {
@@ -76,14 +91,13 @@ export default function MonitoringDeviceList({ onSelect, selectedId, className =
               {/* 중앙: Health 도넛 */}
               <div className="flex justify-center items-center">
                 <Donut
-                  value={it.health.pct}
-                  color={healthColorForPct(it.health.pct)}
+                  value={it.health?.pct ?? 0}
                   showValue={false}
                   size={30}
                   stroke={6}
                   variant="conic"
                 />
-                <span className="text-slate-300 text-sm w-14 text-right">{it.health.pct}%</span>
+                <span className="text-slate-300 text-sm w-14 text-right">{it.health?.pct ?? 0}%</span>
               </div>
 
               {/* 우측: 신호 막대 */}

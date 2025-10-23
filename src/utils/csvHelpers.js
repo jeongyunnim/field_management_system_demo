@@ -9,16 +9,6 @@ export const toIso = (ms) => {
   return d.toISOString().replace("Z", `${sign}${hh}:${mm}`);
 };
 
-// helper: epoch seconds automatic 판단(1970 vs 2004)
-export const epochSecToDateAuto = (sec) => {
-  const n = Number(sec);
-  if (!Number.isFinite(n)) return NaN;
-  const base2004 = Date.UTC(2004, 0, 1);
-  const d1970 = n * 1000;
-  const d2004 = base2004 + n * 1000;
-  return Math.abs(d2004 - Date.now()) <= Math.abs(d1970 - Date.now()) ? d2004 : d1970;
-};
-
 // from gnss UTC parts -> ms
 export const fromUtcPartsMs = ({ y, m, d, hh, mm, ss }) =>
   Date.UTC(y, (m ?? 1) - 1, d ?? 1, hh ?? 0, mm ?? 0, ss ?? 0);
