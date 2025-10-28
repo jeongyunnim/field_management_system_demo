@@ -66,7 +66,7 @@ export default function MonitoringDeviceList({ onSelect, selectedId, className =
 
   return (
     <div className={["transition-colors h-full min-h-0", className].join(" ")}>
-      <div className="overflow-y-auto p-2 rounded-xl ring-2 ring-white/10 space-y-2 bg-[#122033]/80">
+      <div className="overflow-y-auto max-h-80 p-2 rounded-xl ring-2 ring-white/10 space-y-2 bg-[#122033]/80">
         {items.map((it) => {
           const active = selectedId === it.id;
           return (

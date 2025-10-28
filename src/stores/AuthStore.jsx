@@ -1,47 +1,44 @@
-// src/stores/AuthStore.js
+// src/stores/AuthStore.js (평문 버전)
 import { create } from "zustand";
-
-const DEFAULT_CREDENTIALS = {
-  username: "admin",
-  password: "admin1234",
-};
-
-// localStorage 키
-const STORAGE_KEY = "v2x_maintenance_auth";
-
-/**
- * localStorage에서 자격 증명 로드
- */
-function loadCredentials() {
-  try {
-    const stored = localStorage.getItem(STORAGE_KEY);
-    if (stored) {
-      return JSON.parse(stored);
-    }
-  } catch (error) {
-    console.error("Failed to load credentials:", error);
-  }
-  return DEFAULT_CREDENTIALS;
-}
-
-/**
- * localStorage에 자격 증명 저장
- */
-function saveCredentials(credentials) {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(credentials));
-  } catch (error) {
-    console.error("Failed to save credentials:", error);
-  }
-}
+import {
+  loadCredentials,
+  saveCredentials,
+  resetCredentials as dbResetCredentials,
+  changePassword as dbChangePassword,
+  changeUsername as dbChangeUsername,
+  verifyPassword,
+  logAuth,
+} from "../dbms/authDb";
 
 export const useAuthStore = create((set, get) => ({
-  // 로그인 상태
+  // 상태
   isAuthenticated: false,
   currentUser: null,
+  credentials: null,
+  isLoading: true,
 
-  // 저장된 자격 증명
-  credentials: loadCredentials(),
+  /**
+   * 초기화: DB에서 자격 증명 로드
+   */
+  initialize: async () => {
+    try {
+      await logAuth("STORE_INITIALIZE_START");
+      const credentials = await loadCredentials();
+      
+      set({
+        credentials,
+        isLoading: false,
+      });
+      
+      await logAuth("STORE_INITIALIZE_SUCCESS", {
+        username: credentials.username,
+      });
+    } catch (error) {
+      await logAuth("STORE_INITIALIZE_ERROR", { error: error.message });
+      console.error("Failed to initialize auth store:", error);
+      set({ isLoading: false });
+    }
+  },
 
   /**
    * 로그인
@@ -49,28 +46,51 @@ export const useAuthStore = create((set, get) => ({
   login: (username, password) => {
     const { credentials } = get();
 
-    if (username === credentials.username && password === credentials.password) {
-      set({
-        isAuthenticated: true,
-        currentUser: username,
-      });
-      return { success: true };
+    if (!credentials) {
+      logAuth("LOGIN_FAILED", { reason: "no_credentials" });
+      return { success: false, error: "시스템 오류가 발생했습니다." };
     }
 
-    return {
-      success: false,
-      error: "사용자 이름 또는 비밀번호가 일치하지 않습니다.",
-    };
+    // 사용자 이름 확인
+    if (username !== credentials.username) {
+      logAuth("LOGIN_FAILED", { 
+        reason: "invalid_username",
+        attempted: username 
+      });
+      return { success: false, error: "사용자 이름 또는 비밀번호가 올바르지 않습니다." };
+    }
+
+    // 비밀번호 확인 (평문 비교)
+    if (password !== credentials.password) {
+      logAuth("LOGIN_FAILED", { 
+        reason: "invalid_password",
+        username 
+      });
+      return { success: false, error: "사용자 이름 또는 비밀번호가 올바르지 않습니다." };
+    }
+
+    // 로그인 성공
+    set({
+      isAuthenticated: true,
+      currentUser: credentials.username,
+    });
+
+    logAuth("LOGIN_SUCCESS", { username: credentials.username });
+    return { success: true };
   },
 
   /**
    * 로그아웃
    */
   logout: () => {
+    const { currentUser } = get();
+    
     set({
       isAuthenticated: false,
       currentUser: null,
     });
+
+    logAuth("LOGOUT", { username: currentUser });
   },
 
   /**
@@ -79,28 +99,35 @@ export const useAuthStore = create((set, get) => ({
   changePassword: (currentPassword, newPassword) => {
     const { credentials } = get();
 
+    if (!credentials) {
+      return { success: false, error: "시스템 오류가 발생했습니다." };
+    }
+
+    // 현재 비밀번호 확인 (평문 비교)
     if (currentPassword !== credentials.password) {
-      return {
-        success: false,
-        error: "현재 비밀번호가 일치하지 않습니다.",
-      };
+      logAuth("CHANGE_PASSWORD_FAILED", { 
+        reason: "invalid_current_password",
+        username: credentials.username 
+      });
+      return { success: false, error: "현재 비밀번호가 일치하지 않습니다." };
     }
 
+    // 비밀번호 유효성 검사
     if (newPassword.length < 6) {
-      return {
-        success: false,
-        error: "비밀번호는 6자 이상이어야 합니다.",
-      };
+      return { success: false, error: "비밀번호는 최소 6자 이상이어야 합니다." };
     }
 
+    // 새 비밀번호로 업데이트 (평문)
     const newCredentials = {
       ...credentials,
       password: newPassword,
+      updatedAt: Date.now(),
     };
 
     saveCredentials(newCredentials);
     set({ credentials: newCredentials });
 
+    logAuth("CHANGE_PASSWORD_SUCCESS", { username: credentials.username });
     return { success: true };
   },
 
@@ -110,23 +137,29 @@ export const useAuthStore = create((set, get) => ({
   changeUsername: (password, newUsername) => {
     const { credentials } = get();
 
+    if (!credentials) {
+      return { success: false, error: "시스템 오류가 발생했습니다." };
+    }
+
+    // 비밀번호 확인 (평문 비교)
     if (password !== credentials.password) {
-      return {
-        success: false,
-        error: "비밀번호가 일치하지 않습니다.",
-      };
+      logAuth("CHANGE_USERNAME_FAILED", { 
+        reason: "invalid_password",
+        username: credentials.username 
+      });
+      return { success: false, error: "비밀번호가 일치하지 않습니다." };
     }
 
+    // 사용자 이름 유효성 검사
     if (newUsername.length < 3) {
-      return {
-        success: false,
-        error: "사용자 이름은 3자 이상이어야 합니다.",
-      };
+      return { success: false, error: "사용자 이름은 최소 3자 이상이어야 합니다." };
     }
 
+    // 새 사용자 이름으로 업데이트
     const newCredentials = {
       ...credentials,
       username: newUsername,
+      updatedAt: Date.now(),
     };
 
     saveCredentials(newCredentials);
@@ -135,18 +168,29 @@ export const useAuthStore = create((set, get) => ({
       currentUser: newUsername,
     });
 
+    logAuth("CHANGE_USERNAME_SUCCESS", {
+      oldUsername: credentials.username,
+      newUsername,
+    });
     return { success: true };
   },
 
   /**
-   * 자격 증명 초기화 (기본값으로 복원)
+   * 자격 증명 초기화 (admin/admin1234)
    */
-  resetCredentials: () => {
-    saveCredentials(DEFAULT_CREDENTIALS);
+  resetCredentials: async () => {
+    await dbResetCredentials();
+    const credentials = await loadCredentials();
+    
     set({
-      credentials: DEFAULT_CREDENTIALS,
+      credentials,
       isAuthenticated: false,
       currentUser: null,
     });
+
+    logAuth("CREDENTIALS_RESET", { newUsername: credentials.username });
   },
 }));
+
+// 앱 시작 시 자격 증명 로드
+useAuthStore.getState().initialize();

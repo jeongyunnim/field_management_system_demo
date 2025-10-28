@@ -1,4 +1,5 @@
-import React, { useMemo, useEffect } from "react";
+// src/pages/DeviceMonitoring.jsx
+import React, { useMemo, useEffect, useRef } from "react";
 import { shallow } from "zustand/shallow";
 import { BookCheck, ShieldCheck, ShieldOff, CircleX } from "lucide-react";
 
@@ -7,6 +8,7 @@ import { useInspectStore } from "../stores/InspectStore";
 import { useMetricsStore } from "../stores/MetricsStore";
 import { useRseStore } from "../stores/RseStore";
 import { useModalStore } from "../stores/ModalStore";
+import { useOtaStore } from "../stores/OtaStore";
 
 // Components
 import MonitoringDeviceList from "../components/monitor/MonitoringDeviceList";
@@ -27,12 +29,21 @@ import { calculateCertDaysLeft } from "../utils/certificateUtils";
 import { MQTT_TOPICS, HEALTH_CHECK_LABELS, TILE_STYLES, CERT_STATES } from "../constants/appConstants";
 import { readFileAsText, selectFile } from "../utils/fileUtils";
 
+// OTA Services
+import { 
+  checkDeviceVersion, 
+  performUpdate
+} from "../services/ota/otaService";
+
 /**
  * 장치 모니터링 메인 컴포넌트
  */
 export default function DeviceMonitoring() {
   const phase = useInspectStore((s) => s.phase);
   const setSelected = useMetricsStore((s) => s.setSelected);
+
+  // 이미 체크한 디바이스 ID 추적
+  const checkedDevicesRef = useRef(new Set());
 
   // Stale 감시 시작/종료
   useEffect(() => {
@@ -44,6 +55,7 @@ export default function DeviceMonitoring() {
   useEffect(() => {
     if (phase !== "running") {
       setSelected(null);
+      checkedDevicesRef.current.clear();
     }
   }, [phase, setSelected]);
 
@@ -52,6 +64,29 @@ export default function DeviceMonitoring() {
   const selected = useRseStore((s) => (selectedId ? s.byId[selectedId] : null), shallow);
   const seriesById = useMetricsStore((s) => s.seriesById);
   const latestById = useMetricsStore((s) => s.latestById);
+
+  // 선택된 디바이스가 바뀔 때만 OTA 버전 체크
+  useEffect(() => {
+    if (!selected?.id || !selected.active) return;
+
+    const deviceId = selected.id;
+    const deviceIp = extractDeviceIp(selected.__raw);
+    
+    if (!deviceIp) return;
+
+    // 이미 체크한 디바이스는 스킵
+    if (checkedDevicesRef.current.has(deviceId)) {
+      return;
+    }
+
+    console.log(`[OTA] Checking version for device: ${deviceId}`);
+    checkedDevicesRef.current.add(deviceId);
+    
+    checkDeviceVersion(deviceId, deviceIp).catch((error) => {
+      console.error(`[OTA] Failed to check version for ${deviceId}:`, error);
+      checkedDevicesRef.current.delete(deviceId);
+    });
+  }, [selected?.id, selected?.active]);
 
   // 시계열 데이터
   const selectedSeries = useMemo(() => {
@@ -81,7 +116,12 @@ export default function DeviceMonitoring() {
         </div>
 
         {/* 상단 비주얼 요약 */}
-        <SummaryPanel selected={selected} series={selectedSeries} latest={latest} />
+        <SummaryPanel 
+          selected={selected} 
+          series={selectedSeries} 
+          latest={latest}
+          checkedDevicesRef={checkedDevicesRef}
+        />
 
         {/* 하단 리스트 */}
         <MonitoringDeviceList
@@ -94,13 +134,21 @@ export default function DeviceMonitoring() {
 }
 
 /* ================== 상단 요약 패널 ================== */
-function SummaryPanel({ selected, series, latest }) {
-  // Zustand 모달 스토어 사용
+function SummaryPanel({ selected, series, latest, checkedDevicesRef }) {
   const modals = useModalStore((state) => state.modals);
   const openModal = useModalStore((state) => state.openModal);
   const closeModal = useModalStore((state) => state.closeModal);
   
   const setWarning = useMetricsStore((s) => s.setWarning);
+
+  // OTA 상태 가져오기
+  const deviceStatus = useOtaStore((s) => s.deviceStatus[selected?.id]);
+  const isUpdating = useOtaStore((s) => s.isUpdating);
+  const hasOtaPackages = useOtaStore((s) => s.localIndex !== null); // ⭐ DB에 OTA 패키지 존재 여부
+
+  // 장치 IP 확인
+  const deviceIp = selected ? extractDeviceIp(selected.__raw) : null;
+  const hasDeviceIp = !!deviceIp;
 
   // 헬스 퍼센트 계산
   const healthPercent = getHealthPercent(selected?.health);
@@ -113,14 +161,14 @@ function SummaryPanel({ selected, series, latest }) {
     setWarning(selected.id, hasWarning);
   }, [selected?.id, healthPercent, setWarning]);
 
-  // 인증서 남은 일수 계산 (실시간 계산)
+  // 인증서 남은 일수 계산
   const certDaysLeft = useMemo(() => {
     const cert = selected?.__raw?.certificate;
     if (!cert) return null;
     return calculateCertDaysLeft(cert);
   }, [selected?.__raw?.certificate]);
 
-  // 신호 관련 데이터 (selected에서 가져오되 없으면 기본값)
+  // 신호 관련 데이터
   const signalData = useMemo(() => {
     return {
       bars: Number.isFinite(selected?.bars) ? selected.bars : 0,
@@ -146,6 +194,11 @@ function SummaryPanel({ selected, series, latest }) {
    * 물리보안 토글 핸들러
    */
   async function handleTamperToggle() {
+    if (!hasDeviceIp) {
+      alert("장치의 IP 주소를 찾을 수 없습니다.");
+      return;
+    }
+
     const nextState = !isTamperOn;
     const topic = nextState ? MQTT_TOPICS.TAMPER_ENABLE : MQTT_TOPICS.TAMPER_DISABLE;
     const message = nextState
@@ -155,11 +208,6 @@ function SummaryPanel({ selected, series, latest }) {
     if (!window.confirm(message)) return;
 
     try {
-      const deviceIp = extractDeviceIp(selected.__raw);
-      if (!deviceIp) {
-        throw new Error("장치의 LTE-V2X IP를 찾을 수 없습니다.");
-      }
-
       const payload = {
         VER: "1.0",
         TRANSACTION_ID: generateTransactionId(),
@@ -182,7 +230,12 @@ function SummaryPanel({ selected, series, latest }) {
   }
 
   async function handleMapDataUpdateBtn() {
-    const reqTopic = MQTT_TOPICS.MAP_UPDATE_REQ; // ⚠️ REBOOT_REQ가 아닌 MAP 전용 topic으로 변경 필요
+    if (!hasDeviceIp) {
+      alert("장치의 IP 주소를 찾을 수 없습니다.");
+      return;
+    }
+
+    const reqTopic = MQTT_TOPICS.MAP_UPDATE_REQ;
     const resTopic = MQTT_TOPICS.MAP_UPDATE_RES;
     const message = "MAP 데이터를 업데이트 하시겠습니까?";
     
@@ -190,19 +243,12 @@ function SummaryPanel({ selected, series, latest }) {
       return;
 
     try {
-      const deviceIp = extractDeviceIp(selected.__raw);
-      if (!deviceIp) {
-        throw new Error("장치의 LTE-V2X IP를 찾을 수 없습니다.");
-      }
-
-      // 파일 선택 UI
       const file = await selectFile({
         description: "MAP 데이터 파일"
       });
 
       if (!file) return;
 
-      // 파일 내용을 텍스트로 읽기
       const mapDataContent = await readFileAsText(file);
       
       if (!mapDataContent || mapDataContent.trim() === "") {
@@ -241,81 +287,200 @@ function SummaryPanel({ selected, series, latest }) {
             { oid: "citsRsuV2xMsgTxPsid", value: 82056, value_type: 3 },
             { oid: "citsRsuV2xMsgTxStartTime", value: 0, value_type: 3 },
             { oid: "citsRsuV2xMsgTxStopTime", value: 939128857, value_type: 3 },
-            { oid: "citsRsuV2xMsgTxTimeSlot", value: 0, value_type: 1 }
-          ]
-        }
+            { oid: "citsRsuV2xMsgTxType", value: 1, value_type: 1 },
+          ],
+        },
       };
 
-      await rpcDirect({
+      const response = await rpcDirect({
         pktOrIp: deviceIp,
-        reqTopic, 
+        reqTopic,
         resTopic,
         payload,
         match: (e) => {
-          console.log("MAP Update Response:", e);
-          if (e?.header?.code === 200) {
-            alert(`[RSE Message] MAP 데이터 업데이트 성공`);
-            return true;
-          }
-          console.warn("Unexpected response code:", e?.header?.code);
-          alert(`업데이트 실패: CODE=${e?.header?.code}`);
-          return false;
+          return e?.header?.transactionId === transactionId;
         },
-        timeoutMs: 15000, // MAP 데이터 크기에 따라 시간 증가
+        timeoutMs: 10000,
         qos: 1,
       });
 
+      if (response?.header?.CODE === "200") {
+        console.log("MAP data update success:", response);
+        alert("MAP 데이터 업데이트 완료");
+      } else {
+        console.warn("Unexpected response code:", response?.header?.CODE);
+        alert(`응답 코드: ${response?.header?.CODE}`);
+      }
     } catch (error) {
       console.error("MAP data update failed:", error);
       alert(`전송 실패: ${error?.message || error}`);
     }
   }
 
-// ========== 유틸리티 함수 ==========
-
-
   async function handleRebootBtn() {
+    if (!hasDeviceIp) {
+      alert("장치의 IP 주소를 찾을 수 없습니다.");
+      return;
+    }
+
     const reqTopic = MQTT_TOPICS.REBOOT_REQ;
     const resTopic = MQTT_TOPICS.REBOOT_RES;
-    const message = "장치를 재부팅 하시겠습니까?";
 
-    if (!window.confirm(message)) 
+    if (!window.confirm("정말로 재부팅 하시겠습니까?"))
       return;
 
     try {
-      const deviceIp = extractDeviceIp(selected.__raw);
-      if (!deviceIp) {
-        throw new Error("장치의 LTE-V2X IP를 찾을 수 없습니다.");
-      }
-
-      const payload = {
-        VER: "1.0",
-        TRANSACTION_ID: generateTransactionId(),
-        REASON: "Maintenance reboot",
-      };
-
       await rpcDirect({
         pktOrIp: deviceIp,
-        reqTopic, 
+        reqTopic,
         resTopic,
-        payload,
-        match: (e) => {
-          console.log("Response:", e);
-          if (e?.CODE === 200) {
-            alert(`[RSE Message] ${e?.MSG || '재부팅 성공'}`);
-            return true;
-          }
-          console.warn("Unexpected response code:", e?.CODE);
-          return false;
+        payload: {
+          VER: "1.0",
+          TRANSACTION_ID: generateTransactionId(),
+          MSG: "Maintenance reboot",
         },
+        match: (e) => {
+          return e?.CODE == 200 || e?.code == 200;
+        },
+        timeoutMs: 10000,
         qos: 1,
       });
 
+      alert("재부팅 요청 전송 완료");
     } catch (error) {
       console.error("Reboot failed:", error);
       alert(`전송 실패: ${error?.message || error}`);
     }
   }
+
+  /**
+   * S/W 업데이트 버튼 핸들러
+   */
+  async function handleSwUpdateBtn() {
+    if (!hasDeviceIp) {
+      alert("장치의 IP 주소를 찾을 수 없습니다.");
+      return;
+    }
+
+    if (!hasOtaPackages) {
+      alert("OTA 업데이트 경로가 설정되지 않았습니다.\nSettings에서 경로를 설정하세요.");
+      return;
+    }
+
+    try {
+      await performUpdate(selected.id, deviceIp);
+      checkedDevicesRef.current.delete(selected.id);
+    } catch (error) {
+      console.error("SW Update failed:", error);
+      alert(`업데이트 실패: ${error?.message || error}`);
+    }
+  }
+
+  /**
+   * 수동 버전 체크
+   */
+  async function handleManualVersionCheck() {
+    if (!hasDeviceIp) {
+      alert("장치의 IP 주소를 찾을 수 없습니다.");
+      return;
+    }
+
+    if (!hasOtaPackages) {
+      alert("OTA 업데이트 경로가 설정되지 않았습니다.\nSettings에서 경로를 설정하세요.");
+      return;
+    }
+
+    try {
+      console.log(`[OTA] Manual version check for device: ${selected.id}`);
+      
+      checkedDevicesRef.current.delete(selected.id);
+      
+      await checkDeviceVersion(selected.id, deviceIp);
+      
+      checkedDevicesRef.current.add(selected.id);
+    } catch (error) {
+      console.error("Manual version check failed:", error);
+      alert(`버전 체크 실패: ${error?.message || error}`);
+    }
+  }
+
+  // S/W 업데이트 버튼 상태 결정
+  const getSwUpdateButtonState = () => {
+    // ⭐ IP가 없으면 비활성화
+    if (!hasDeviceIp) {
+      return {
+        disabled: true,
+        className: "w-40 flex-auto device-inspection-icon-btn justify-center bg-slate-700 opacity-50 cursor-not-allowed",
+        text: "S/W 업데이트",
+        title: "장치 IP를 찾을 수 없습니다",
+      };
+    }
+
+    // ⭐ OTA 경로가 유효하지 않으면 비활성화
+    if (!hasOtaPackages) {
+      return {
+        disabled: true,
+        className: "w-40 flex-auto device-inspection-icon-btn justify-center bg-slate-700 opacity-50 cursor-not-allowed",
+        text: "S/W 업데이트",
+        title: "Settings에서 OTA 패키지를 업로드하세요",
+        onClick: handleManualVersionCheck,
+      };
+    }
+
+    if (!deviceStatus) {
+      return {
+        disabled: false,
+        className: "w-40 flex-auto device-inspection-icon-btn justify-center bg-cyan-900/90",
+        text: "S/W 업데이트",
+        onClick: handleManualVersionCheck,
+      };
+    }
+
+    if (deviceStatus.checking) {
+      return {
+        disabled: true,
+        className: "w-40 flex-auto device-inspection-icon-btn justify-center bg-slate-700 opacity-75 cursor-wait",
+        text: "버전 확인 중...",
+      };
+    }
+
+    if (deviceStatus.error) {
+      return {
+        disabled: false,
+        className: "w-40 flex-auto device-inspection-icon-btn justify-center bg-red-900/50",
+        text: "재시도",
+        title: deviceStatus.error,
+        onClick: handleManualVersionCheck,
+      };
+    }
+
+    if (isUpdating) {
+      return {
+        disabled: true,
+        className: "w-40 flex-auto device-inspection-icon-btn justify-center bg-blue-900 opacity-75 cursor-wait",
+        text: "업데이트 중...",
+      };
+    }
+
+    if (deviceStatus.hasUpdate) {
+      return {
+        disabled: false,
+        className: "w-40 flex-auto device-inspection-icon-btn justify-center bg-amber-600 hover:bg-amber-700 transition-colors",
+        text: `업데이트 (${deviceStatus.updateCount})`,
+        onClick: handleSwUpdateBtn,
+      };
+    }
+
+    return {
+      disabled: false,
+      className: "w-40 flex-auto device-inspection-icon-btn justify-center bg-emerald-900/50",
+      text: "최신 버전",
+      onClick: handleManualVersionCheck,
+    };
+  };
+
+  const swUpdateButtonState = getSwUpdateButtonState();
+
   // 헬스 이슈 추출
   const issues = extractHealthIssues(selected?.health);
 
@@ -341,21 +506,52 @@ function SummaryPanel({ selected, series, latest }) {
         </div>
 
         {/* 재부팅 버튼 */}
-        <div type="button" onClick={handleRebootBtn} className="col-span-2 device-inspection-icon-btn bg-rose-900/90">
+        <div 
+          type="button" 
+          onClick={hasDeviceIp ? handleRebootBtn : null}
+          className={`col-span-2 device-inspection-icon-btn ${
+            hasDeviceIp ? "bg-rose-900/90" : "bg-slate-700 opacity-50 cursor-not-allowed"
+          }`}
+          title={!hasDeviceIp ? "장치 IP를 찾을 수 없습니다" : ""}
+        >
           <span>재부팅</span>
         </div>
 
         {/* 액션 버튼들 */}
         <div className="flex justify-between col-span-12 space-x-2">
-          <button onClick={handleMapDataUpdateBtn} className="w-40 flex-auto device-inspection-icon-btn justify-center bg-cyan-900/90">
+          {/* MAP Data 업데이트 - IP 체크 */}
+          <button 
+            onClick={hasDeviceIp ? handleMapDataUpdateBtn : null}
+            disabled={!hasDeviceIp}
+            className={`w-40 flex-auto device-inspection-icon-btn justify-center ${
+              hasDeviceIp ? "bg-cyan-900/90" : "bg-slate-700 opacity-50 cursor-not-allowed"
+            }`}
+            title={!hasDeviceIp ? "장치 IP를 찾을 수 없습니다" : ""}
+          >
             <span>MAP Data 업데이트</span>
           </button>
-          <button className="w-40 flex-auto device-inspection-icon-btn justify-center bg-cyan-900/90">
+
+          {/* 장치제어(SNMP) - IP 체크 */}
+          <button 
+            disabled={!hasDeviceIp}
+            className={`w-40 flex-auto device-inspection-icon-btn justify-center ${
+              hasDeviceIp ? "bg-cyan-900/90" : "bg-slate-700 opacity-50 cursor-not-allowed"
+            }`}
+            title={!hasDeviceIp ? "장치 IP를 찾을 수 없습니다" : ""}
+          >
             <span>장치제어(SNMP)</span>
           </button>
-          <button className="w-40 flex-auto device-inspection-icon-btn justify-center bg-cyan-900/90">
-            <span>S/W 업데이트</span>
+          
+          {/* S/W 업데이트 - IP & OTA 경로 체크 */}
+          <button
+            onClick={swUpdateButtonState.onClick}
+            disabled={swUpdateButtonState.disabled}
+            className={swUpdateButtonState.className}
+            title={swUpdateButtonState.title}
+          >
+            <span>{swUpdateButtonState.text}</span>
           </button>
+          
           <button
             type="button"
             onClick={() => openModal("debug")}
@@ -410,7 +606,7 @@ function SummaryPanel({ selected, series, latest }) {
         />
       </div>
 
-      {/* 모달들 - Zustand로 상태 관리 */}
+      {/* 모달들 */}
       <HealthIssuesModal
         open={modals.healthIssues}
         onClose={() => closeModal("healthIssues")}
@@ -437,16 +633,12 @@ function SummaryPanel({ selected, series, latest }) {
 
 /* ================== 물리보안 & 인증서 타일 ================== */
 function SecurityTiles({ isTamperOn, onTamperToggle, certificate, certDaysLeft, onCertClick }) {
-  // 물리보안 아이콘
   const SecurityIcon = isTamperOn ? ShieldCheck : ShieldOff;
-
-  // 인증서 상태 결정
   const certState = determineCertState(certificate, certDaysLeft);
   const certConfig = getCertConfig(certState, certDaysLeft);
 
   return (
     <>
-      {/* 물리보안 타일 */}
       <button
         className={`${TILE_STYLES.BASE} ${isTamperOn ? TILE_STYLES.OK : TILE_STYLES.WARN}`}
         title={isTamperOn ? "물리 보안: 적용 중" : "물리 보안: 비활성 — 조치 필요"}
@@ -458,7 +650,6 @@ function SecurityTiles({ isTamperOn, onTamperToggle, certificate, certDaysLeft, 
         <span>{isTamperOn ? "적용 중" : "미적용"}</span>
       </button>
 
-      {/* 인증서 타일 */}
       <button
         type="button"
         onClick={onCertClick}
@@ -476,32 +667,20 @@ function SecurityTiles({ isTamperOn, onTamperToggle, certificate, certDaysLeft, 
 
 /* ================== 헬퍼 함수 ================== */
 
-/**
- * 헬스 체크에서 이슈 추출
- */
 function extractHealthIssues(health) {
   if (!health) return [];
-
-  // 이미 이슈 배열이 있으면 반환
   if (Array.isArray(health.issues) && health.issues.length > 0) {
     return health.issues;
   }
-
-  // flags 객체에서 실패한 항목 추출
   const flags = health.flags && typeof health.flags === "object" ? health.flags : null;
   if (!flags) return [];
-
   return Object.entries(flags)
     .filter(([_, value]) => value === false)
     .map(([key]) => HEALTH_CHECK_LABELS[key] || key);
 }
 
-/**
- * 인증서 상태 결정
- */
 function determineCertState(certificate, daysLeft) {
   if (!certificate) return CERT_STATES.UNKNOWN;
-
   const rawEnable = certificate.ltev2x_cert_status_security_enable;
   const isEnabled =
     rawEnable === true ||
@@ -509,15 +688,11 @@ function determineCertState(certificate, daysLeft) {
     rawEnable === "1" ||
     rawEnable === "Y" ||
     rawEnable === "y";
-
   if (!isEnabled) return CERT_STATES.DISABLED;
   if (daysLeft == null) return CERT_STATES.UNKNOWN;
   return daysLeft >= 0 ? CERT_STATES.OK : CERT_STATES.EXPIRED;
 }
 
-/**
- * 인증서 상태에 따른 UI 설정 반환
- */
 function getCertConfig(state, daysLeft) {
   const configs = {
     [CERT_STATES.OK]: {
@@ -545,6 +720,5 @@ function getCertConfig(state, daysLeft) {
       title: "인증서 D-day 정보 없음 — 조치 필요",
     },
   };
-
   return configs[state];
 }

@@ -1,3 +1,4 @@
+// src/stores/RseStore.jsx
 import { create } from "zustand";
 import { parseRsePacket } from "../utils/parseRse";
 import { computeHealthSummary, detectSecurityWarnings } from "../utils/transformRse";

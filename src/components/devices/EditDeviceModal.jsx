@@ -10,6 +10,12 @@ export default function EditDeviceModal({ open, onClose, deviceId, onDone }) {
   const [device, setDevice] = useState(null);
   const [serial, setSerial] = useState("");
   const [model, setModel] = useState("");
+  const [latitude, setLatitude] = useState("");
+  const [longitude, setLongitude] = useState("");
+  const [ipv4, setIpv4] = useState("");
+  const [ipv6, setIpv6] = useState("");
+  const [gateway, setGateway] = useState("");
+  const [dns, setDns] = useState("");
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
@@ -18,6 +24,12 @@ export default function EditDeviceModal({ open, onClose, deviceId, onDone }) {
       setDevice(null);
       setSerial("");
       setModel("");
+      setLatitude("");
+      setLongitude("");
+      setIpv4("");
+      setIpv6("");
+      setGateway("");
+      setDns("");
       return;
     }
     (async () => {
@@ -32,6 +44,12 @@ export default function EditDeviceModal({ open, onClose, deviceId, onDone }) {
         setDevice(found);
         setSerial(found.serial ?? "");
         setModel(found.model ?? "");
+        setLatitude(found.latitude != null ? String(found.latitude) : "");
+        setLongitude(found.longitude != null ? String(found.longitude) : "");
+        setIpv4(found.ipv4 ?? "");
+        setIpv6(found.ipv6 ?? "");
+        setGateway(found.gateway ?? "");
+        setDns(found.dns ?? "");
       } finally {
         setLoading(false);
       }
@@ -63,11 +81,33 @@ export default function EditDeviceModal({ open, onClose, deviceId, onDone }) {
         }
       }
 
+      // 업데이트할 데이터 구성 (옵션 필드는 값이 있을 때만 포함)
+      const updateData = {
+        serial: nextSerial,
+        model: nextModel,
+      };
+
+      // 위도/경도는 값이 있으면 숫자로 변환, 없으면 null
+      if (latitude.trim()) {
+        updateData.latitude = parseFloat(latitude.trim());
+      } else {
+        updateData.latitude = null;
+      }
+
+      if (longitude.trim()) {
+        updateData.longitude = parseFloat(longitude.trim());
+      } else {
+        updateData.longitude = null;
+      }
+
+      // 네트워크 정보는 값이 있으면 문자열, 없으면 null
+      updateData.ipv4 = ipv4.trim() || null;
+      updateData.ipv6 = ipv6.trim() || null;
+      updateData.gateway = gateway.trim() || null;
+      updateData.dns = dns.trim() || null;
+
       await deviceDb.transaction("rw", deviceDb.devices, async () => {
-        await deviceDb.devices.update(device.id, {
-          serial: nextSerial,
-          model: nextModel,
-        });
+        await deviceDb.devices.update(device.id, updateData);
       });
 
       if (nextSerial !== device.serial) {
@@ -75,7 +115,7 @@ export default function EditDeviceModal({ open, onClose, deviceId, onDone }) {
       }
 
       alert("디바이스 정보가 수정되었습니다.");
-      onDone?.(); // 목록 리프레시
+      onDone?.();
       onClose?.();
     } catch (e2) {
       if (e2 instanceof Dexie.ConstraintError) {
@@ -95,7 +135,7 @@ export default function EditDeviceModal({ open, onClose, deviceId, onDone }) {
       onClose={onClose}
       title="디바이스 수정"
       icon={<Pencil size={18} />}
-      maxWidth="max-w-lg"
+      maxWidth="max-w-2xl"
       footer={
         <div className="flex gap-2">
           <button
@@ -118,32 +158,113 @@ export default function EditDeviceModal({ open, onClose, deviceId, onDone }) {
       }
     >
       {loading ? (
-        <div className="p-2 text-slate-300">⏳ 디바이스 정보를 불러오는 중...</div>
+        <div className="p-2 text-slate-300">디바이스 정보를 불러오는 중...</div>
       ) : !device ? (
         <div className="p-2 text-slate-400">장치를 찾을 수 없습니다.</div>
       ) : (
         <form id="edit-device-form" onSubmit={handleSave} className="space-y-4">
-          <div>
-            <label className="block mb-1 text-sm font-medium text-slate-200">Serial</label>
-            <input
-              type="text"
-              value={serial}
-              onChange={(e) => setSerial(e.target.value)}
-              className="w-full px-3 py-2 rounded bg-slate-800 text-slate-100 border border-white/10"
-            />
-            {serial !== device.serial && (
-              <p className="mt-1 text-xs text-slate-400">저장 시 Serial이 변경됩니다.</p>
-            )}
+          {/* 필수 필드 */}
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-slate-200 mb-1">
+                Serial <span className="text-red-400">*</span>
+              </label>
+              <input
+                type="text"
+                value={serial}
+                onChange={(e) => setSerial(e.target.value)}
+                className="w-full px-3 py-2 rounded bg-slate-800 text-slate-100 border border-white/10 focus:border-sky-500 focus:outline-none"
+                required
+              />
+              {serial !== device.serial && (
+                <p className="mt-1 text-xs text-slate-400">저장 시 Serial이 변경됩니다.</p>
+              )}
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-200 mb-1">모델</label>
+              <input
+                type="text"
+                value={model}
+                onChange={(e) => setModel(e.target.value)}
+                className="w-full px-3 py-2 rounded bg-slate-800 text-slate-100 border border-white/10 focus:border-sky-500 focus:outline-none"
+              />
+            </div>
           </div>
 
-          <div>
-            <label className="block mb-1 text-sm font-medium text-slate-200">모델</label>
-            <input
-              type="text"
-              value={model}
-              onChange={(e) => setModel(e.target.value)}
-              className="w-full px-3 py-2 rounded bg-slate-800 text-slate-100 border border-white/10"
-            />
+          {/* 위치 정보 */}
+          <div className="pt-2 border-t border-white/10">
+            <h3 className="text-sm font-semibold text-slate-300 mb-3">위치 정보 (선택)</h3>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-slate-200 mb-1">위도</label>
+                <input
+                  type="number"
+                  step="any"
+                  value={latitude}
+                  onChange={(e) => setLatitude(e.target.value)}
+                  placeholder="예: 37.5665"
+                  className="w-full px-3 py-2 rounded bg-slate-800 text-slate-100 border border-white/10 focus:border-sky-500 focus:outline-none"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-200 mb-1">경도</label>
+                <input
+                  type="number"
+                  step="any"
+                  value={longitude}
+                  onChange={(e) => setLongitude(e.target.value)}
+                  placeholder="예: 126.9780"
+                  className="w-full px-3 py-2 rounded bg-slate-800 text-slate-100 border border-white/10 focus:border-sky-500 focus:outline-none"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* 네트워크 정보 */}
+          <div className="pt-2 border-t border-white/10">
+            <h3 className="text-sm font-semibold text-slate-300 mb-3">네트워크 정보 (선택)</h3>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-slate-200 mb-1">IPv4</label>
+                <input
+                  type="text"
+                  value={ipv4}
+                  onChange={(e) => setIpv4(e.target.value)}
+                  placeholder="예: 192.168.1.100"
+                  className="w-full px-3 py-2 rounded bg-slate-800 text-slate-100 border border-white/10 focus:border-sky-500 focus:outline-none"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-200 mb-1">IPv6</label>
+                <input
+                  type="text"
+                  value={ipv6}
+                  onChange={(e) => setIpv6(e.target.value)}
+                  placeholder="예: 2001:0db8::1"
+                  className="w-full px-3 py-2 rounded bg-slate-800 text-slate-100 border border-white/10 focus:border-sky-500 focus:outline-none"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-200 mb-1">게이트웨이</label>
+                <input
+                  type="text"
+                  value={gateway}
+                  onChange={(e) => setGateway(e.target.value)}
+                  placeholder="예: 192.168.1.1"
+                  className="w-full px-3 py-2 rounded bg-slate-800 text-slate-100 border border-white/10 focus:border-sky-500 focus:outline-none"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-200 mb-1">DNS</label>
+                <input
+                  type="text"
+                  value={dns}
+                  onChange={(e) => setDns(e.target.value)}
+                  placeholder="예: 8.8.8.8"
+                  className="w-full px-3 py-2 rounded bg-slate-800 text-slate-100 border border-white/10 focus:border-sky-500 focus:outline-none"
+                />
+              </div>
+            </div>
           </div>
         </form>
       )}

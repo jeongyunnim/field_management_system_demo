@@ -1,12 +1,14 @@
-// src/pages/Login.jsx
+// src/pages/Login.jsx (평문 버전)
 import { useState } from "react";
 import { useAuthStore } from "../stores/AuthStore";
+import PasswordRecoveryModal from "../components/PasswordRecoveryModal";
 
 export default function Login() {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [showRecovery, setShowRecovery] = useState(false);
 
   const login = useAuthStore((s) => s.login);
 
@@ -59,7 +61,6 @@ export default function Login() {
           <h1 className="text-3xl font-bold text-slate-100 mb-2">
             V2X Maintenance Hub
           </h1>
-          <p className="text-slate-400">시스템에 로그인하세요</p>
         </div>
 
         {/* Login Form */}
@@ -190,6 +191,16 @@ export default function Login() {
             </button>
           </form>
 
+          {/* Forgot Password Link */}
+          <div className="mt-4 text-center">
+            <button
+              onClick={() => setShowRecovery(true)}
+              className="text-sm text-blue-400 hover:text-blue-300 transition-colors underline"
+            >
+              비밀번호를 잊으셨나요?
+            </button>
+          </div>
+
           {/* Footer Info */}
           <div className="mt-6 text-center text-sm text-slate-500">
             <p className="mt-1">기본 계정: admin / admin1234</p>
@@ -198,9 +209,15 @@ export default function Login() {
 
         {/* Version Info */}
         <div className="text-center mt-6 text-xs text-slate-600">
-          <p>DYNAVISTA V2X Field Managment System v1.0.0</p>
+          <p>V2X Maintenance Hub v1.0.0 (Plaintext)</p>
         </div>
       </div>
+
+      {/* Password Recovery Modal */}
+      <PasswordRecoveryModal
+        isOpen={showRecovery}
+        onClose={() => setShowRecovery(false)}
+      />
     </div>
   );
 }

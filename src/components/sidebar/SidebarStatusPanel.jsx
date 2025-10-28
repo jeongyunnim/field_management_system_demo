@@ -6,7 +6,7 @@ import { Activity, Radio, Navigation2 } from "lucide-react";
 const Badge = ({ ok, lte = false }) => (
   <span
     className={`inline-block h-3 w-7 rounded-full shadow 
-      ${ok ? "bg-[#32E36C] animate-pulse" : "bg-slate-600/60"}
+      ${ok ? "bg-[#32E36C] animate-pulse" : "bg-red-600/60 animate-pulse"}
       ${lte ? "mr-1" : ""}`}
   />
 );

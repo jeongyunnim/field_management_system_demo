@@ -15,6 +15,12 @@ export const MQTT_TOPICS = {
 
   MAP_UPDATE_REQ: "fac/V2X_MAINTENANCE_HUB_CLIENT_PA/SNMP_PA/snmpSet/req/citsRsuV2xMsgTxTable",
   MAP_UPDATE_RES: "fac/SNMP_PA/V2X_MAINTENANCE_HUB_CLIENT_PA/snmpSet/resp/citsRsuV2xMsgTxTable",
+
+  // OTA 업데이트
+  OTA_VERSION_REQ: "fac/V2X_MAINTENANCE_HUB_CLIENT_PA/SW_UPDATE_MGMT_PA/swLocalRegistry/req",
+  OTA_VERSION_RES: "fac/SW_UPDATE_MGMT_PA/V2X_MAINTENANCE_HUB_CLIENT_PA/swLocalRegistry/resp",
+  OTA_UPDATE_REQ: "fac/V2X_MAINTENANCE_HUB_CLIENT_PA/SW_UPDATE_MGMT_PA/swUpdate/req",
+  OTA_UPDATE_RES: "fac/SW_UPDATE_MGMT_PA/V2X_MAINTENANCE_HUB_CLIENT_PA/swUpdate/resp",
 };
 
 // 타임아웃 설정 (ms)
@@ -22,6 +28,13 @@ export const TIMEOUTS = {
   DEFAULT: 6000,
   MQTT_CONNECT: 5000,
   CERT_UPLOAD: 12000,
+  OTA_VERSION_CHECK: 5000,
+  OTA_UPDATE: 30000,
+};
+
+// OTA 설정
+export const OTA_CONFIG = {
+  INDEX_PATH: "C:\\TEMP\\SW_UPDATE_PKG\\index.json", // 로컬 index.json 경로
 };
 
 // 헬스 체크 항목 라벨

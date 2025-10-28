@@ -3,8 +3,16 @@ import Dexie from "dexie";
 
 export const deviceDb = new Dexie("DeviceDB");
 
+// 버전 1: 기존 스키마
 deviceDb.version(1).stores({
   devices: "++id, &serial, model, latitude, longitude, registeredAt",
+});
+
+// 버전 2: 네트워크 정보 필드 추가 (인덱스는 불필요하므로 stores에 명시 안 함)
+deviceDb.version(2).stores({
+  devices: "++id, &serial, model, latitude, longitude, registeredAt",
+  // ipv4, ipv6, gateway, dns는 인덱스가 필요없으므로 스키마에 명시하지 않음
+  // Dexie는 스키마에 없는 필드도 자동으로 저장 가능
 });
 
 const regCache = new Map(); // serial -> boolean
@@ -42,14 +50,15 @@ export async function getDeviceIdBySerial(serial) {
   return id;
 }
 
-
 export function invalidateRegistrationCache(oldSerial, newSerial) {
   if (oldSerial) {
     regCache.delete(oldSerial);
     tsCache.delete(oldSerial);
+    idCache.delete(oldSerial);
   }
   if (newSerial) {
     regCache.delete(newSerial);
     tsCache.delete(newSerial);
+    idCache.delete(newSerial);
   }
 }

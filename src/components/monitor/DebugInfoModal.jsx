@@ -1,14 +1,13 @@
+// src/components/monitor/DebugInfoModal.jsx
 import { X, FileDown, ChevronDown, ChevronRight, Copy, Check } from "lucide-react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useDebugModalStore } from "../../stores/ModalStore";
-import { epochSecToDateAuto } from "../../utils/epochSecToDateAuto";
 import {
   formatDate,
   formatPercent,
   formatTemperature,
   formatCoordinates,
   formatRssi,
-  formatCertExpiry,
   downloadJson,
   copyToClipboard,
   getHealthPercent,
@@ -48,19 +47,28 @@ export default function DebugInfoModal({ open, onClose, selected }) {
   const resetDebugModal = useDebugModalStore((state) => state.reset);
   
   const [copied, setCopied] = useState(false);
+  const [currentData, setCurrentData] = useState(selected);
+
+  // ⭐ 최신 패킷으로 자동 갱신
+  useEffect(() => {
+    if (open && selected) {
+      setCurrentData(selected);
+    }
+  }, [open, selected]);
 
   if (!open) return null;
 
   // 모달 닫기 시 상태 리셋
   const handleClose = () => {
     resetDebugModal();
+    setCurrentData(null);
     onClose();
   };
 
   // JSON 다운로드
   const handleDownload = () => {
-    const filename = `debug_${selected?.serial ?? selected?.id ?? "unknown"}.json`;
-    const success = downloadJson(selected ?? {}, filename);
+    const filename = `debug_${currentData?.serial ?? currentData?.id ?? "unknown"}.json`;
+    const success = downloadJson(currentData ?? {}, filename);
     
     if (!success) {
       alert("다운로드에 실패했습니다.");
@@ -69,7 +77,7 @@ export default function DebugInfoModal({ open, onClose, selected }) {
 
   // JSON 클립보드 복사
   const handleCopyJson = async () => {
-    const jsonString = JSON.stringify(selected?.__raw ?? {}, null, 2);
+    const jsonString = JSON.stringify(currentData?.__raw ?? {}, null, 2);
     const success = await copyToClipboard(jsonString);
     
     if (success) {
@@ -81,11 +89,10 @@ export default function DebugInfoModal({ open, onClose, selected }) {
   };
 
   // 기본 정보 추출
-  const deviceInfo = extractDeviceInfo(selected);
-  const signalInfo = extractSignalInfo(selected);
-  const healthInfo = extractHealthInfo(selected);
-  const resourceInfo = extractResourceInfo(selected);
-  const certificateInfo = extractCertificateInfo(selected);
+  const deviceInfo = extractDeviceInfo(currentData);
+  const signalInfo = extractSignalInfo(currentData);
+  const healthInfo = extractHealthInfo(currentData);
+  const resourceInfo = extractResourceInfo(currentData);
 
   return (
     <div className="fixed inset-0 z-[9999]">
@@ -151,23 +158,12 @@ export default function DebugInfoModal({ open, onClose, selected }) {
               )}
             </InfoCard>
 
-            {/* 리소스 */}
+            {/* 시스템 리소스 */}
             <InfoCard title="시스템 리소스" className="col-span-2 md:col-span-1">
               <KeyValuePair label="CPU 사용률" value={resourceInfo.cpu} />
               <KeyValuePair label="메모리 사용률" value={resourceInfo.memory} />
               <KeyValuePair label="스토리지 사용률" value={resourceInfo.disk} />
               <KeyValuePair label="온도" value={resourceInfo.temperature} />
-            </InfoCard>
-
-            {/* 인증서 */}
-            <InfoCard title="인증서" className="col-span-2">
-              <KeyValuePair label="보안 기능" value={certificateInfo.status} />
-              <KeyValuePair label="유효 시작" value={certificateInfo.validStart} />
-              <KeyValuePair label="유효 종료" value={certificateInfo.validEnd} />
-              <KeyValuePair label="만기" value={certificateInfo.expiry} />
-              <div className="text-slate-400 text-xs mt-1">
-                * 유효 기간 epoch는 플랫폼 설정에 따라 1970 또는 2004 기준일 수 있습니다.
-              </div>
             </InfoCard>
 
             {/* 원본 JSON 토글 */}
@@ -192,7 +188,7 @@ export default function DebugInfoModal({ open, onClose, selected }) {
                     {copied ? <Check size={14} /> : <Copy size={14} />}
                   </button>
                   <pre className="max-h-64 overflow-auto text-xs whitespace-pre-wrap bg-black/30 rounded p-3 pr-12">
-                    {JSON.stringify(selected?.__raw ?? {}, null, 2)}
+                    {JSON.stringify(currentData?.__raw ?? {}, null, 2)}
                   </pre>
                 </div>
               )}
@@ -225,6 +221,8 @@ function extractDeviceInfo(selected) {
     status: selected?.active ? "Active" : "Inactive",
     lastUpdate: selected?.updatedAt 
       ? formatDate(selected.updatedAt)
+      : selected?._ts 
+      ? formatDate(new Date(selected._ts))
       : "—",
   };
 }
@@ -233,10 +231,18 @@ function extractDeviceInfo(selected) {
  * 신호 및 위치 정보 추출
  */
 function extractSignalInfo(selected) {
+  const raw = selected?.__raw ?? {};
+  
+  // RSSI 추출 (여러 소스 시도)
+  let rssi = selected?.rssiDbm;
+  if (rssi == null && raw?.rf_stat) {
+    rssi = raw.rf_stat.rssi_dbm ?? raw.rf_stat.rssi;
+  }
+  
   return {
-    rssi: formatRssi(selected?.rssiDbm),
+    rssi: formatRssi(rssi),
     bars: String(Number.isFinite(selected?.bars) ? selected.bars : 0),
-    coordinates: formatCoordinates(selected?.coords),
+    coordinates: formatCoordinates(selected?.gnss ?? selected?.coords),
   };
 }
 
@@ -263,33 +269,48 @@ function extractHealthInfo(selected) {
 
 /**
  * 시스템 리소스 정보 추출
+ * ⭐ 실제 패킷 구조에 맞게 수정 (2025-10-27)
  */
 function extractResourceInfo(selected) {
-  return {
-    cpu: formatPercent(selected?.cpuTotalPct),
-    memory: formatPercent(selected?.memUsedPct),
-    disk: formatPercent(selected?.diskUsedPct),
-    temperature: formatTemperature(selected?.temperatureC),
-  };
-}
-
-/**
- * 인증서 정보 추출
- */
-function extractCertificateInfo(selected) {
-  const cert = selected?.__raw?.certificate ?? selected?.certificate ?? null;
-  const certEnabled = !!cert?.ltev2x_cert_status_security_enable;
+  const raw = selected?.__raw ?? {};
+  
+  // 디버깅: 사용 가능한 모든 경로 확인
+  if (process.env.NODE_ENV === 'development') {
+    console.log('[DebugModal] Raw data keys:', Object.keys(raw));
+    console.log('[DebugModal] CPU status:', raw?.cpu_usage_status);
+    console.log('[DebugModal] Memory status:', raw?.memory_usage_status);
+    console.log('[DebugModal] Storage status:', raw?.storage_usage_status);
+    console.log('[DebugModal] Temperature status:', raw?.temperature_status);
+  }
+  
+  // ⭐ CPU: 실제 패킷 구조
+  let cpu = selected?.cpuTotalPct 
+    ?? selected?.cpuUsage 
+    ?? selected?.cpu
+    ?? raw?.cpu_usage_status?.cpu_usage_total_percent  // ✅ 실제 필드
+  
+  // ⭐ 메모리: 실제 패킷 구조
+  let memory = selected?.memUsedPct 
+    ?? selected?.memoryUsage
+    ?? selected?.memory
+    ?? raw?.memory_usage_status?.memory_usage_percent  // ✅ 실제 필드
+  
+  // ⭐ 디스크: 실제 패킷 구조
+  let disk = selected?.diskUsedPct 
+    ?? selected?.storageUsage
+    ?? selected?.disk
+    ?? raw?.storage_usage_status?.storage_usage_percent  // ✅ 실제 필드
+  
+  // ⭐ 온도: 실제 패킷 구조
+  let temperature = selected?.temperatureC 
+    ?? selected?.temperature
+    ?? selected?.temp
+    ?? raw?.temperature_status?.temperature_celsius  // ✅ 실제 필드
   
   return {
-    status: cert 
-      ? (certEnabled ? "활성화" : "비활성화")
-      : "정보 없음",
-    validStart: cert 
-      ? formatDate(epochSecToDateAuto(Number(cert?.ltev2x_cert_valid_start)))
-      : "정보 없음",
-    validEnd: cert 
-      ? formatDate(epochSecToDateAuto(Number(cert?.ltev2x_cert_valid_end)))
-      : "정보 없음",
-    expiry: formatCertExpiry(selected?.certDaysLeft),
+    cpu: formatPercent(cpu),
+    memory: formatPercent(memory),
+    disk: formatPercent(disk),
+    temperature: formatTemperature(temperature),
   };
 }

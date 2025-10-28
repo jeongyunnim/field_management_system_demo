@@ -1,14 +1,11 @@
 import { logEvent } from "../../core/logger";
 import mqtt from "mqtt";
-import { extractDeviceIp } from "../../utils/deviceUtils";
+import { extractDeviceIp, generateTransactionId } from "../../utils/deviceUtils";
 
 /* -------------------- 연결 & 세션 -------------------- */
 
 /**
  * 단일 MQTT 클라이언트 연결
- * @param {string} url - MQTT 브로커 URL
- * @param {object} options - 연결 옵션
- * @returns {Promise<mqtt.Client>} 연결된 MQTT 클라이언트
  */
 async function connectOne(url, { 
   connectTimeout = 5000, 
@@ -49,9 +46,6 @@ async function connectOne(url, {
 
 /**
  * IP 주소로 MQTT 연결 시도
- * @param {string} ip - 장치 IP 주소
- * @param {object} opts - 연결 옵션
- * @returns {Promise<{client: mqtt.Client, url: string}>}
  */
 async function connectWithFallback(ip, opts = {}) {
   const url = `ws://${ip}:9001`;
@@ -89,10 +83,6 @@ class DirectSession {
 
   /**
    * JSON 페이로드 발행
-   * @param {string} topic - MQTT 토픽
-   * @param {object} payload - 발행할 데이터
-   * @param {object} options - 발행 옵션
-   * @returns {Promise<void>}
    */
   publishJson(topic, payload, { qos = 1, retain = false } = {}) {
     this.touch();
@@ -141,40 +131,20 @@ class DirectSession {
 
   /**
    * RPC 호출 (요청-응답 패턴)
-   * @param {object} params - RPC 파라미터
-   * @param {string} params.reqTopic - 요청 토픽
-   * @param {string} params.resTopic - 응답 토픽
-   * @param {object} params.payload - 요청 페이로드
-   * @param {function} params.match - 응답 매칭 함수
-   * @param {number} params.timeoutMs - 타임아웃 (ms)
-   * @param {number} params.qos - QoS 레벨
-   * @returns {Promise<object>} 응답 객체
    */
   rpcJson({ reqTopic, resTopic, payload, match, timeoutMs = 6000, qos = 1 }) {
     this.touch();
-    
-    console.log("=== rpcJson called ===");
-    console.log("reqTopic:", reqTopic);
-    console.log("resTopic:", resTopic);
-    console.log("payload:", payload);
     
     return new Promise(async (resolve, reject) => {
       let timer;
 
       const handleMessage = (topic, message) => {
-        console.log("=== Message received ===");
-        console.log("Topic:", topic);
-        console.log("Expected resTopic:", resTopic);
-        console.log("Match:", topic === resTopic);
-        
         if (topic !== resTopic) {
-          console.log("Topic mismatch - ignoring");
           return;
         }
 
         try {
           const response = JSON.parse(message.toString());
-          console.log("=== Parsed Response ===", response);
 
           if (!match || match(response)) {
             clearTimeout(timer);
@@ -190,28 +160,19 @@ class DirectSession {
             });
             
             resolve(response);
-          } else {
-            console.log("=== RPC Response match failed ===", { 
-              response, 
-              matchResult: match(response) 
-            });
           }
         } catch (error) {
           console.error("Failed to parse RPC response:", error);
-          console.error("Raw message:", message.toString());
         }
       };
 
       try {
         // 구독
-        console.log("Subscribing to:", resTopic);
         await new Promise((res, rej) =>
           this.client.subscribe(resTopic, { qos }, (error) => {
             if (error) {
-              console.error("Subscribe error:", error);
               rej(error);
             } else {
-              console.log("Subscribe success:", resTopic);
               res();
             }
           })
@@ -219,11 +180,9 @@ class DirectSession {
 
         // 메시지 핸들러 등록
         this.client.on("message", handleMessage);
-        console.log("Message handler registered");
 
         // 타임아웃 타이머
         timer = setTimeout(() => {
-          console.log("=== RPC Timeout ===");
           this.client.off("message", handleMessage);
           this.client.unsubscribe(resTopic, () => {});
           
@@ -240,12 +199,9 @@ class DirectSession {
         }, timeoutMs);
 
         // 요청 발행
-        console.log("Publishing to:", reqTopic);
         await this.publishJson(reqTopic, payload, { qos });
-        console.log("Publish success");
         
       } catch (error) {
-        console.error("=== RPC Flow Error ===", error);
         clearTimeout(timer);
         this.client.off("message", handleMessage);
         try {
@@ -310,8 +266,6 @@ function startGarbageCollection() {
 
 /**
  * 세션 가져오기 (없으면 새로 생성)
- * @param {string|object} pktOrIp - IP 문자열 또는 패킷 객체
- * @returns {Promise<DirectSession>}
  */
 export async function getDirectSession(pktOrIp) {
   const ip = extractDeviceIp(pktOrIp);
@@ -339,8 +293,6 @@ export async function getDirectSession(pktOrIp) {
 
 /**
  * 장치로 직접 메시지 발행
- * @param {object} params - 발행 파라미터
- * @returns {Promise<void>}
  */
 export async function publishDirect({ pktOrIp, topic, payload, qos = 1, retain = false }) {
   const session = await getDirectSession(pktOrIp);
@@ -349,12 +301,195 @@ export async function publishDirect({ pktOrIp, topic, payload, qos = 1, retain =
 
 /**
  * RPC 호출 (요청-응답)
- * @param {object} params - RPC 파라미터
- * @returns {Promise<object>}
  */
 export async function rpcDirect({ pktOrIp, reqTopic, resTopic, payload, match, timeoutMs = 6000, qos = 1 }) {
   const session = await getDirectSession(pktOrIp);
   return session.rpcJson({ reqTopic, resTopic, payload, match, timeoutMs, qos });
+}
+
+/* -------------------- OTA 전용 함수 -------------------- */
+
+/**
+ * RSE 버전 정보 조회 (재시도 포함)
+ * @param {string|object} pktOrIp - 장치 IP 또는 패킷
+ * @param {number} maxRetries - 최대 재시도 횟수 (기본 3회)
+ * @returns {Promise<object>} 버전 정보 응답
+ */
+export async function requestDeviceVersionWithRetry(pktOrIp, maxRetries = 3) {
+  const ip = extractDeviceIp(pktOrIp);
+  
+  logEvent({
+    level: "INFO",
+    source: "OTA",
+    entity: ip,
+    event: "VERSION_CHECK_START",
+    message: "Starting version check with retry",
+    details: { maxRetries },
+  });
+
+  let lastError;
+  
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      const response = await rpcDirect({
+        pktOrIp,
+        reqTopic: "fac/V2X_MAINTENANCE_HUB_CLIENT_PA/SW_UPDATE_MGMT_PA/swLocalRegistry/req",
+        resTopic: "fac/SW_UPDATE_MGMT_PA/V2X_MAINTENANCE_HUB_CLIENT_PA/swLocalRegistry/resp",
+        payload: {},
+        timeoutMs: 5000,
+        qos: 1,
+      });
+
+      logEvent({
+        level: "INFO",
+        source: "OTA",
+        entity: ip,
+        event: "VERSION_CHECK_SUCCESS",
+        message: `Version check succeeded on attempt ${attempt}`,
+        details: { attempt, entryCount: response.entry_count },
+      });
+
+      return response;
+    } catch (error) {
+      lastError = error;
+      
+      logEvent({
+        level: "WARN",
+        source: "OTA",
+        entity: ip,
+        event: "VERSION_CHECK_RETRY",
+        message: `Version check attempt ${attempt} failed`,
+        details: { attempt, maxRetries, error: String(error) },
+      });
+
+      if (attempt < maxRetries) {
+        // 재시도 전 대기 (지수 백오프)
+        await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
+      }
+    }
+  }
+
+  // 모든 재시도 실패
+  logEvent({
+    level: "ERROR",
+    source: "OTA",
+    entity: ip,
+    event: "VERSION_CHECK_FAIL",
+    message: "Version check failed after all retries",
+    details: { maxRetries, error: String(lastError) },
+  });
+
+  throw lastError;
+}
+
+/**
+ * RSE 업데이트 수행
+ * @param {string|object} pktOrIp - 장치 IP 또는 패킷
+ * @param {object} updateRequest - 업데이트 요청 객체
+ * @returns {Promise<object>} 업데이트 응답
+ */
+export async function performDeviceUpdate(pktOrIp, updateRequest) {
+  const ip = extractDeviceIp(pktOrIp);
+  
+  logEvent({
+    level: "INFO",
+    source: "OTA",
+    entity: ip,
+    event: "UPDATE_REQUEST",
+    message: "Sending update request",
+    details: { 
+      transactionId: updateRequest.transaction_id,
+      fileCount: updateRequest.entries?.length || 0 
+    },
+  });
+
+  try {
+    const response = await rpcDirect({
+      pktOrIp,
+      reqTopic: "fac/V2X_MAINTENANCE_HUB_CLIENT_PA/SW_UPDATE_MGMT_PA/swUpdate/req",
+      resTopic: "fac/SW_UPDATE_MGMT_PA/V2X_MAINTENANCE_HUB_CLIENT_PA/swUpdate/resp",
+      payload: updateRequest,
+      match: (resp) => resp?.entries?.code == 200,
+      timeoutMs: 300000, // 300초 (파일 전송 시간 고려)
+      qos: 1,
+    });
+
+    logEvent({
+      level: "INFO",
+      source: "OTA",
+      entity: ip,
+      event: "UPDATE_RESPONSE",
+      message: "Update response received",
+      details: { 
+        transactionId: response.transaction_id,
+        entries: response.entries 
+      },
+    });
+
+    return response;
+  } catch (error) {
+    logEvent({
+      level: "ERROR",
+      source: "OTA",
+      entity: ip,
+      event: "UPDATE_FAIL",
+      message: "Update request failed",
+      details: { error: String(error) },
+    });
+    throw error;
+  }
+}
+
+/**
+ * RSE 재부팅 요청
+ * @param {string|object} pktOrIp - 장치 IP 또는 패킷
+ * @returns {Promise<object>} 재부팅 응답
+ */
+export async function requestDeviceReboot(pktOrIp) {
+  const ip = extractDeviceIp(pktOrIp);
+  
+  logEvent({
+    level: "INFO",
+    source: "OTA",
+    entity: ip,
+    event: "REBOOT_REQUEST",
+    message: "Sending reboot request",
+  });
+
+  try {
+    const response = await rpcDirect({
+      pktOrIp,
+      reqTopic: "fac/V2X_MAINTENANCE_HUB_CLIENT_PA/SYS_CTRL_PA/systemRestart/req",
+      resTopic: "fac/SYS_CTRL_PA/V2X_MAINTENANCE_HUB_CLIENT_PA/systemRestart/resp",
+      payload: {
+        VER: "1.0",
+        TRANSACTION_ID: generateTransactionId(),
+        REASON: "Maintenance reboot"
+      },
+      timeoutMs: 5000,
+      qos: 1,
+    });
+
+    logEvent({
+      level: "INFO",
+      source: "OTA",
+      entity: ip,
+      event: "REBOOT_SUCCESS",
+      message: "Reboot request succeeded",
+    });
+
+    return response;
+  } catch (error) {
+    logEvent({
+      level: "ERROR",
+      source: "OTA",
+      entity: ip,
+      event: "REBOOT_FAIL",
+      message: "Reboot request failed",
+      details: { error: String(error) },
+    });
+    throw error;
+  }
 }
 
 /**

@@ -1,3 +1,4 @@
+// src/core/logger.js
 import { useEventLogStore } from "../stores/EventListStore";
 
 function now() { return Date.now(); }

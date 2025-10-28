@@ -24,28 +24,28 @@ export default function Sidebar({ activePage, setActivePage}) {
 
         {/* 메인 화면 */}
         <SidebarItem
-          imgSrc="/public/icons/Icon_MainDisplay_Sel.png"
+          imgSrc="/icons/Icon_MainDisplay_Sel.png"
           label="메인화면"
           active={activePage === "Main"}
           onClick={() => go("Main")}
         />
         {/* 장치 관리 */}
         <SidebarItem
-          imgSrc="/public/icons/Icon_RseDeviceSet_Sel.png"
+          imgSrc="/icons/Icon_RseDeviceSet_Sel.png"
           label="RSE 장치관리"
           active={activePage === "DeviceList"}
           onClick={() => go("DeviceList")}
         />
         {/* 장치 모니터링 */}
         <SidebarItem
-          imgSrc="/public/icons/Icon_RseMonitoring_Sel.png"
+          imgSrc="/icons/Icon_RseMonitoring_Sel.png"
           label="RSE 모니터링"
           active={activePage === "DeviceMonitoring"}
           onClick={() => go("DeviceMonitoring")}
         />
         {/* Settings */}
         <SidebarItem
-          imgSrc="/public/icons/Icon_Settings_Sel.png"
+          imgSrc="/icons/Icon_Settings_Sel.png"
           label="설정"
           active={activePage === "Settings"}
           onClick={() => go("Settings")}

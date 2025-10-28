@@ -12,6 +12,7 @@ import DeviceList from "./pages/DeviceList.jsx";
 import DeviceMonitoring from "./pages/DeviceMonitoring.jsx";
 import Settings from "./pages/Settings.jsx";
 import StationMapPanel from "./components/monitor/StationMapPanel.jsx";
+import OtaUpdateManager from "./components/OtaManager.jsx";
 
 export default function App() {
   const [activePage, setActivePage] = useState("Main");
@@ -85,6 +86,7 @@ export default function App() {
           </main>
         </div>
       </div>
+      <OtaUpdateManager />
     </div>
   );
 }
