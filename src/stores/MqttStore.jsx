@@ -2,10 +2,12 @@ import { create } from "zustand";
 import mqtt from "mqtt";
 
 export const useMqttStore = create((set, get) => {
+
   // 내부 리스너 & 구독목록 (스토어 외부로 노출하지 않음)
   const listeners = new Set();                              // Set<(topic, msg, packet) => void>
   const subs = new Map();                                   // Map<string, { qos?: 0|1|2 }>
   let client = null;
+  
 
   const subscribeAll = () => {
     if (!client || !client.connected) {
@@ -73,6 +75,32 @@ export const useMqttStore = create((set, get) => {
       set({ connected: false });
     },
 
+    // 재연결 메서드 추가
+    reconnect() {
+      if (process.env.NODE_ENV !== "production") {
+        console.log("[mqttStore] manual reconnect requested");
+      }
+      
+      if (client) {
+        try {
+          // 기존 연결 종료
+          client.end(true);
+        } catch (e) {
+          console.warn("[mqttStore] error closing client:", e);
+        }
+        client = null;
+      }
+      
+      // 연결 상태 초기화
+      set({ connected: false });
+      
+      // 새로운 연결 시도 (기존 connect 메서드 재사용)
+      const { connect } = get();
+      setTimeout(() => {
+        connect();
+      }, 100);
+    },
+
     publish(topic, payload, opts = {}) {
       if (!client || !client.connected) {
         if (process.env.NODE_ENV !== "production") {
@@ -99,6 +127,7 @@ export const useMqttStore = create((set, get) => {
       }
       subscribeAll();
     },
+
     unsubscribeTopics(topics) {
       const list = Array.isArray(topics) ? topics : [];
       for (const t of list) {
@@ -117,6 +146,35 @@ export const useMqttStore = create((set, get) => {
     addMessageHandler(fn) {
       listeners.add(fn);
       return () => listeners.delete(fn);
+    },
+
+    // waitFor 메서드 추가 (inspectionController에서 사용)
+    waitFor(topic, timeout = 5000) {
+      return new Promise((resolve, reject) => {
+        if (!client) {
+          reject(new Error("MQTT client not initialized"));
+          return;
+        }
+
+        const timeoutId = setTimeout(() => {
+          removeHandler();
+          reject(new Error(`Timeout waiting for response on ${topic}`));
+        }, timeout);
+
+        const messageHandler = (receivedTopic, message) => {
+          if (receivedTopic === topic) {
+            clearTimeout(timeoutId);
+            removeHandler();
+            resolve(message);
+          }
+        };
+
+        const removeHandler = () => {
+          listeners.delete(messageHandler);
+        };
+
+        listeners.add(messageHandler);
+      });
     },
 
     // zustand setState 접근자
