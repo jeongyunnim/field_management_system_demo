@@ -90,11 +90,6 @@ export const CSV_HEADER = [
   "num_sats",
   "num_sats_used",
   
-  // GNSS ECEF
-  "ecef_x",
-  "ecef_y",
-  "ecef_z",
-  
   // 네트워크
   "primary_ip",
   "eth0_ip",
@@ -284,10 +279,6 @@ function extractLocationInfo(gnss) {
     
     num_sats: N(gnss?.numSatellites),
     num_sats_used: N(gnss?.numUsedSatellites),
-    
-    ecef_x: N(gnss?.ecef_x),
-    ecef_y: N(gnss?.ecef_y),
-    ecef_z: N(gnss?.ecef_z),
   };
 }
 
