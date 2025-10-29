@@ -144,7 +144,7 @@ function SummaryPanel({ selected, series, latest, checkedDevicesRef }) {
   // OTA 상태 가져오기
   const deviceStatus = useOtaStore((s) => s.deviceStatus[selected?.id]);
   const isUpdating = useOtaStore((s) => s.isUpdating);
-  const hasOtaPackages = useOtaStore((s) => s.localIndex !== null); // ⭐ DB에 OTA 패키지 존재 여부
+  const hasOtaPackages = useOtaStore((s) => s.localIndex !== null);
 
   // 장치 IP 확인
   const deviceIp = selected ? extractDeviceIp(selected.__raw) : null;
@@ -406,7 +406,6 @@ function SummaryPanel({ selected, series, latest, checkedDevicesRef }) {
 
   // S/W 업데이트 버튼 상태 결정
   const getSwUpdateButtonState = () => {
-    // ⭐ IP가 없으면 비활성화
     if (!hasDeviceIp) {
       return {
         disabled: true,

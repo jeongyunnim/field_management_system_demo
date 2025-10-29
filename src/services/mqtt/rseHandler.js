@@ -81,7 +81,7 @@ function handleUnregisteredDevice(serial, data) {
   });
 
   try {
-    // 통계 목적으로만 저장 (MonitoringDeviceList에서 필터링됨)
+    // 통계 목적으로만 저장 (UI에서 isRegistered=false 필터링됨)
     const unregisteredId = `unregistered_${serial}`;
     useRseStore.getState().upsertUnregisteredDevice(unregisteredId, serial, data);
   } catch (error) {
@@ -133,14 +133,6 @@ async function handleRegisteredDevice(serial, data) {
 
     // 3. 메트릭 업데이트
     updateMetrics(item);
-
-    logEvent({
-      level: "DEBUG",
-      source: "RSE",
-      entity: canonicalId,
-      event: "STATUS_UPDATE",
-      message: `Device status updated: ${serial}`,
-    });
   } catch (error) {
     logEvent({
       level: "ERROR",
@@ -248,4 +240,22 @@ export async function batchCheckRegistration(serials) {
   );
   
   return results;
+}
+
+/**
+ * 🆕 DB 업데이트 후 즉시 재검증 트리거
+ * 
+ * 사용 예:
+ * ```js
+ * await registerDevice(serial);
+ * triggerDeviceRevalidation(); // 즉시 UI 반영
+ * ```
+ */
+export function triggerDeviceRevalidation() {
+  try {
+    useRseStore.getState().triggerRevalidation();
+    console.log("[rseHandler] Manual revalidation triggered");
+  } catch (error) {
+    console.error("[rseHandler] Revalidation failed:", error);
+  }
 }

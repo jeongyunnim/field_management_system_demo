@@ -34,7 +34,7 @@ export default function DeviceList() {
     setEditTargetId(id);
   }
 
-  function handleZoom(dev) {
+  function handleDetail(dev) {
     if (dev.latitude && dev.longitude) {
       alert(`위치 보기:\n위도: ${dev.latitude}\n경도: ${dev.longitude}`);
       // TODO: 지도 모달 열기 또는 외부 지도 링크
@@ -72,13 +72,6 @@ export default function DeviceList() {
         <div className="flex justify-between items-center mb-6">
           <h2 className="main-card-title tracking-tight">등록 기기</h2>
           <div className="flex items-center gap-2">
-            <button
-              onClick={() => alert("기기조회 기능 준비 중")}
-              title="기기조회"
-              className="btn"
-            >
-              기기조회
-            </button>
             <button
               onClick={() => alert("엑셀 등록 기능 준비 중")}
               title="엑셀 등록"
@@ -169,7 +162,7 @@ export default function DeviceList() {
                     <div className="inline-flex items-center gap-1.5">
                       <IconBtn 
                         title={dev.latitude && dev.longitude ? "위치 보기" : "위치 미등록"} 
-                        onClick={() => handleZoom(dev)}
+                        onClick={() => handleDetail(dev)}
                         disabled={!dev.latitude || !dev.longitude}
                       >
                         <ZoomIn size={18} />

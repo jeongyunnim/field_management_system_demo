@@ -22,13 +22,6 @@ export function handleVmStatus(buf) {
     
     // VmStatusStore 업데이트
     useVmStatusStore.getState().setFromVmStatus(msg);
-    
-    logEvent({
-      level: "DEBUG",
-      source: "VM",
-      event: "STATUS_UPDATE",
-      message: "VM status updated",
-    });
   } catch (error) {
     logEvent({
       level: "ERROR",

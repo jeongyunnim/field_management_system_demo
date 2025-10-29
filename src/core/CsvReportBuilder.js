@@ -76,10 +76,6 @@ export class CsvReportBuilder {
 
     // 기본 정보
     lines.push("## BASIC INFORMATION");
-    lines.push(`Serial Number,${csvEscape(summary.meta.serial_number)}`);
-    lines.push(`Hardware Version,${csvEscape(summary.meta.hardware_version)}`);
-    lines.push(`OS Version,${csvEscape(summary.meta.os_version)}`);
-    lines.push(`Firmware Version,${csvEscape(summary.meta.firmware_version)}`);
     lines.push(`Total Packets,${summary.meta.total_packets}`);
     lines.push(`First Timestamp,${summary.meta.first_timestamp}`);
     lines.push(`Last Timestamp,${summary.meta.last_timestamp}`);

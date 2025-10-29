@@ -1,17 +1,18 @@
 // src/components/Header.jsx
+import { useState } from "react";
 import { useMqttStore } from "../stores/MqttStore";
 import { useAuthStore } from "../stores/AuthStore";
 import { useInspectStore } from "../stores/InspectStore";
 import StartInspectionButton from "./buttons/StartInspectionButton";
 import StopInspectionButton from "./buttons/StopInspectionButton";
-import { request } from "../services/mqtt/bus";
-
-const START_SYSTEM_CHECK_ID = 123456789;
-const STOP_SYSTEM_CHECK_ID = 123456790;
+import { request, ensureInitialized, isInitialized } from "../services/mqtt/bus";
+import { generateTransactionId } from "../utils/deviceUtils";
+import { stopSystemCheck } from "../services/mqtt/inspectionController";
 
 export default function Header({ activePage }) {
   const connected = useMqttStore((s) => s.connected);
   const phase = useInspectStore((s) => s.phase);
+  const [isStarting, setIsStarting] = useState(false);
   
   // 인증 상태
   const currentUser = useAuthStore((s) => s.currentUser);
@@ -26,52 +27,86 @@ export default function Header({ activePage }) {
   const path = pageMap[activePage] || [activePage];
 
   const handleStart = async () => {
-    if (!connected) {
-      alert("MQTT가 연결되지 않았습니다.");
+    // 중복 클릭 방지
+    if (isStarting) {
+      console.log("점검 시작 요청 처리 중...");
       return;
     }
+
+    setIsStarting(true);
+
     try {
+      // 1. MQTT 연결 확인
+      if (!connected) {
+        alert("MQTT가 연결되지 않았습니다.\\n재연결 버튼을 클릭하거나 잠시 후 다시 시도하세요.");
+        return;
+      }
+
+      // 2. 버스 초기화 확인 및 자동 초기화
+      if (!isInitialized()) {
+        console.log("MQTT 버스 초기화 중...");
+        
+        try {
+          await ensureInitialized();
+          console.log("✅ MQTT 버스 초기화 완료");
+        } catch (error) {
+          console.error("❌ MQTT 버스 초기화 실패:", error);
+          alert(`MQTT 버스 초기화 실패: ${error.message}\\n페이지를 새로고침하거나 관리자에게 문의하세요.`);
+          return;
+        }
+      }
+
+      // 3. 점검 시작 요청
       const payload = {
         VER: "1.0",
         TS: new Date().toISOString(),
-        TRANSACTION_ID: START_SYSTEM_CHECK_ID,
+        TRANSACTION_ID: generateTransactionId(),
       };
+
+      console.log("점검 시작 요청 전송 중...");
       const resp = await request("startSystemCheck", payload, { timeoutMs: 10000 });
 
-      const code = resp?.data?.CODE ?? resp?.CODE ?? 200;
-      const msg = resp?.data?.MSG ?? resp?.MSG ?? "점검 시작 응답 수신";
+      const code = resp?.CODE ?? 0;
+      const msg = resp?.MSG ?? "점검 시작 응답 수신";
+      
+      console.log(`응답 CODE: ${code}, MSG: ${msg}`);
+      
       if (Number(code) !== 200) {
         console.warn("시작 실패:", code, msg);
         alert(`점검 시작 실패${code ? ` (CODE ${code})` : ""}: ${msg}`);
         return;
       }
-      console.log("✅ 점검 시작:", msg);
-    } catch (e) {
-      console.error("startSystemCheck 실패:", e);
-      alert(`점검 시작 실패: ${e.message || e}`);
+      
+      console.log("✅ 점검 시작 성공:", msg);
+    } catch (error) {
+      console.error("❌ startSystemCheck 실패:", error);
+      
+      // 에러 메시지 개선
+      let errorMessage = "점검 시작 중 오류가 발생했습니다.";
+      
+      if (error.message?.includes("Timeout")) {
+        errorMessage = "FMS 응답 시간 초과\\n네트워크 상태를 확인하거나 잠시 후 다시 시도하세요.";
+      } else if (error.message?.includes("not initialized")) {
+        errorMessage = "MQTT 버스가 초기화되지 않았습니다.\\n페이지를 새로고침하세요.";
+      } else if (error.message?.includes("not connected")) {
+        errorMessage = "MQTT 연결이 끊어졌습니다.\\n재연결 후 다시 시도하세요.";
+      } else {
+        errorMessage = `점검 시작 실패: ${error.message || error}`;
+      }
+      
+      alert(errorMessage);
+    } finally {
+      setIsStarting(false);
     }
   };
 
   const handleStop = async () => {
     try {
-      const payload = {
-        VER: "1.0",
-        TS: new Date().toISOString(),
-        TRANSACTION_ID: STOP_SYSTEM_CHECK_ID,
-      };
-      const resp = await request("stopSystemCheck", payload, { timeoutMs: 10000 });
-
-      const code = resp?.data?.CODE ?? resp?.CODE ?? 200;
-      const msg = resp?.data?.MSG ?? resp?.MSG ?? "점검 종료 응답 수신";
-      if (Number(code) !== 200) {
-        console.warn("중단 실패:", code, msg);
-        alert(`점검 중단 실패${code ? ` (CODE ${code})` : ""}: ${msg}`);
-        return;
-      }
-      console.log("🛑 점검 종료:", msg);
-    } catch (e) {
-      console.error("stopSystemCheck 실패:", e);
-      alert(`점검 중단 실패: ${e.message || e}`);
+      await stopSystemCheck();
+      console.log("✅ 점검 종료");
+    } catch (error) {
+      console.error("❌ 점검 종료 실패:", error);
+      alert(`점검 종료 실패: ${error.message || error}`);
     }
   };
 
@@ -81,6 +116,9 @@ export default function Header({ activePage }) {
     }
   };
 
+  // 점검 시작 버튼 비활성화 조건
+  const isStartDisabled = !connected || phase !== "idle" || isStarting;
+
   return (
     <header className="flex h-20 items-center justify-between px-10 pt-10 bg-[#121d2d]">
       <div className="flex items-center space-x-2 text-slate-400 text-lg">
@@ -89,12 +127,11 @@ export default function Header({ activePage }) {
         <div className="text-lg text-slate-100">{currentUser || "Admin"}</div>
       </div>
 
-      {/* Action buttons */}
       <div className="flex items-center space-x-5 text-2xl text-slate-100">
         <StartInspectionButton
           onStart={handleStart}
           className="shadow-sm"
-          disabled={!connected || phase !== "idle"}
+          disabled={isStartDisabled}
         />
         <StopInspectionButton
           onStop={handleStop}

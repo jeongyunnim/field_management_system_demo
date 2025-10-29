@@ -12,7 +12,8 @@ import {
 
 export const useAuthStore = create((set, get) => ({
   // 상태
-  isAuthenticated: false,
+  // TODO: 절대 바꾸기.
+  isAuthenticated: true,
   currentUser: null,
   credentials: null,
   isLoading: true,

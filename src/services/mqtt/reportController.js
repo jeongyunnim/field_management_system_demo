@@ -201,13 +201,13 @@ function showSuccessMessage(filename) {
   if (isAndroid) {
     alert(
       "보고서가 생성되었습니다.\n" +
-      "공유 앱을 선택하여 이메일, 드라이브 등으로 전송하세요.\n\n" +
+      "Download 폴더에서 확인하세요.\n\n" +
       `파일: ${filename}`
     );
   } else if (isIOS) {
     alert(
       "보고서가 저장되었습니다.\n" +
-      "파일 앱 > Documents 폴더에서 확인하세요.\n\n" +
+      "Documents 폴더에서 확인하세요.\n\n" +
       `파일: ${filename}`
     );
   } else {

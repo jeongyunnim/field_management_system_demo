@@ -23,14 +23,17 @@ export const useRseStore = create((set, get) => ({
   // 경고 상태 맵
   warningById: {},
   
-  // ⭐ 등록 여부 맵
+  // 등록 여부 맵
   registrationById: {},
   
   // Stale 임계값 (초)
   staleSec: 3,
   
-  // Stale 감시 타이머 (내부용)
+  // Stale 감시 타이머
   __staleTimerId: null,
+  
+  // 🆕 재검증 타이머 (DB 동기화용)
+  __revalidateTimerId: null,
 
   // ==================== Stale 감시 ====================
   
@@ -41,7 +44,7 @@ export const useRseStore = create((set, get) => ({
     const state = get();
     
     if (state.__staleTimerId) {
-      console.warn("Stale watcher already running");
+      console.warn("[RseStore] Stale watcher already running");
       return;
     }
 
@@ -83,9 +86,105 @@ export const useRseStore = create((set, get) => ({
     }
   },
 
+  // ==================== 🆕 재검증 (DB 동기화) ====================
+  
+  /**
+   * 🆕 재검증 타이머 시작 - 미등록 장치를 주기적으로 확인
+   */
+  startRevalidation: (intervalMs = 5000) => {
+    const state = get();
+    
+    if (state.__revalidateTimerId) {
+      console.warn("[RseStore] Revalidation already running");
+      return;
+    }
+
+    const timer = setInterval(async () => {
+      await get().revalidateUnregistered();
+    }, intervalMs);
+
+    set({ __revalidateTimerId: timer });
+    console.log(`[RseStore] Revalidation started (every ${intervalMs}ms)`);
+  },
+
+  /**
+   * 🆕 재검증 타이머 중지
+   */
+  stopRevalidation: () => {
+    const { __revalidateTimerId } = get();
+    
+    if (__revalidateTimerId) {
+      clearInterval(__revalidateTimerId);
+      set({ __revalidateTimerId: null });
+      console.log("[RseStore] Revalidation stopped");
+    }
+  },
+
+  /**
+   * 🆕 미등록 장치들의 등록 상태 재확인 및 마이그레이션
+   */
+  revalidateUnregistered: async () => {
+    const { byId } = get();
+    
+    // unregistered_로 시작하는 장치만 필터링
+    const unregisteredDevices = Object.entries(byId).filter(
+      ([id]) => id.startsWith('unregistered_')
+    );
+
+    if (unregisteredDevices.length === 0) return;
+
+    console.log(`[RseStore] Checking ${unregisteredDevices.length} unregistered device(s)...`);
+
+    // 동적 import (순환 참조 방지)
+    const { isDeviceRegistered, getDeviceIdBySerial } = await import('../dbms/deviceDb');
+
+    for (const [unregisteredId, device] of unregisteredDevices) {
+      try {
+        const serial = device.serial;
+        const isRegistered = await isDeviceRegistered(serial);
+
+        if (isRegistered) {
+          // DB에 등록됨! canonical ID 가져오기
+          const canonicalId = await getDeviceIdBySerial(serial);
+          
+          if (canonicalId) {
+            // 미등록 → 등록 마이그레이션
+            console.log(`[RseStore] Device registered: ${serial} (${unregisteredId} → ${canonicalId})`);
+            
+            // 1. 기존 미등록 장치 삭제
+            get().removeById(unregisteredId);
+            
+            // 2. 등록된 장치로 재삽입 (전체 파싱)
+            if (device.__raw) {
+              get().upsertRseStatus(canonicalId, serial, device.__raw);
+            }
+          }
+        }
+      } catch (error) {
+        console.error(`[RseStore] Revalidation error for ${unregisteredId}:`, error);
+      }
+    }
+  },
+
+  /**
+   * 🆕 수동 재검증 트리거 (DB 업데이트 직후 호출)
+   */
+  triggerRevalidation: async () => {
+    console.log("[RseStore] Manual revalidation triggered");
+    await get().revalidateUnregistered();
+  },
+
   // ==================== 셀렉터 ====================
 
   selectAll: () => Object.values(get().byId),
+  
+  // 🆕 등록된 장치만 선택
+  selectRegistered: () =>
+    Object.values(get().byId).filter((device) => device?.isRegistered === true),
+  
+  // 🆕 미등록 장치만 선택
+  selectUnregistered: () =>
+    Object.values(get().byId).filter((device) => device?.isRegistered === false),
 
   selectAllWithFix: () =>
     Object.values(get().byId).filter((device) => 
@@ -143,7 +242,10 @@ export const useRseStore = create((set, get) => ({
       };
     }),
 
-  clear: () => set({ byId: {}, warningById: {}, registrationById: {} }),
+  clear: () => {
+    set({ byId: {}, warningById: {}, registrationById: {} });
+    console.log("[RseStore] Store cleared");
+  },
 
   setWarning: (id, isWarning) =>
     set((state) => {
@@ -161,10 +263,7 @@ export const useRseStore = create((set, get) => ({
     }),
 
   /**
-   * ⭐ 미등록 장치 삽입 (최소 정보만)
-   * @param {string} id - 장치 ID
-   * @param {string} serial - 시리얼 번호
-   * @param {object} raw - 원본 패킷 데이터
+   * 미등록 장치 삽입 (최소 정보만)
    */
   upsertUnregisteredDevice: (id, serial, raw) => {
     const now = Date.now();
@@ -172,10 +271,10 @@ export const useRseStore = create((set, get) => ({
     const unregisteredDevice = {
       id,
       serial,
-      isRegistered: false,  // ⭐ 미등록
+      isRegistered: false,
       active: true,
-      health: null,         // 헬스 정보 없음
-      securityWarnings: [], // 경고 없음
+      health: null,
+      securityWarnings: [],
       _ts: now,
       __raw: raw,
       __receivedAt: now,
@@ -196,16 +295,13 @@ export const useRseStore = create((set, get) => ({
   },
 
   /**
-   * ⭐ 등록된 장치 업데이트 (전체 파싱)
-   * @param {string} id - 장치 ID
-   * @param {string} serial - 시리얼 번호
-   * @param {object} raw - 원본 패킷 데이터
+   * 등록된 장치 업데이트 (전체 파싱)
    */
   upsertRseStatus: (id, serial, raw) => {
     // 패킷 파싱
     const normalized = parseRsePacket(raw);
     if (!normalized) {
-      console.warn(`Failed to parse RSE packet for ${id}`);
+      console.warn(`[RseStore] Failed to parse RSE packet for ${id}`);
       return;
     }
 
@@ -222,7 +318,7 @@ export const useRseStore = create((set, get) => ({
     // 헬스 체크
     const healthSummary = computeHealthSummary(raw);
     
-    // ⭐ 보안/인증 경고 감지
+    // 보안/인증 경고 감지
     const securityWarnings = detectSecurityWarnings(raw, healthSummary);
 
     // 새 상태 생성
@@ -231,8 +327,8 @@ export const useRseStore = create((set, get) => ({
       serial,
       ...normalized,
       health: healthSummary,
-      isRegistered: true,  // ⭐ 등록됨
-      securityWarnings,    // ⭐ 보안 경고
+      isRegistered: true,
+      securityWarnings,
       active: true,
       msgPerSec: Number(messagesPerSecond.toFixed(1)),
       _ts: now,
@@ -276,7 +372,8 @@ export const useRseStore = create((set, get) => ({
     console.log("Active devices:", state.selectActiveCount());
     console.log("Warning devices:", state.selectWarningCount());
     console.log("Stale threshold:", state.staleSec, "seconds");
-    console.log("Watcher running:", !!state.__staleTimerId);
+    console.log("Stale watcher:", !!state.__staleTimerId ? "RUNNING" : "STOPPED");
+    console.log("Revalidation:", !!state.__revalidateTimerId ? "RUNNING" : "STOPPED"); // 🆕
     console.log("======================");
   },
 

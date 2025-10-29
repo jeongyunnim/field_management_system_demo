@@ -187,7 +187,7 @@ export async function saveCsvOnMobile(csvContent, filename) {
         console.log('[ANDROID] URI:', result.uri);
         
         // 사용자에게 알림
-        alert(`파일이 저장되었습니다!\n\n위치: Download/${filename}\n\n파일 관리자에서 확인하세요.`);
+        alert(`파일이 저장되었습니다!\n\n위치: Download/${filename}`);
         
       } catch (externalError) {
         console.warn('[ANDROID] ⚠️ ExternalStorage failed:', externalError.message);
